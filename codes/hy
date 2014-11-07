@@ -1,0 +1,4226 @@
+(require hy.contrib.meth)
+(import [flask [Flask redirect]])
+
+(def app (Flask __name__))
+
+(route hello "/<name>" [name] (.format "(hello \"{0}!\")" name))
+(route root "/" [] (redirect "/hyne"))
+(import [clint.textui [progress]]
+        [time [sleep]]
+        [random [random]])
+
+(for [x (.bar progress (range 100))]
+  (sleep (* (random) 0.1)))
+(require hy.contrib.curry)
+
+
+(defnc s [x y z] ((x z) (y z)))  ; λxyz.xz(yz)
+(defnc k [x] (fn [y] x))  ; λx.λy.x
+(defnc i [x] x)  ;; λx.x 
+
+(defnc succ [n] (+ n 1))
+
+
+(print (((((s ((((k s) k) i) i)) (i i)) ((i (i i))
+               ((((k s) i) ((s (k s)) k)) i))) succ) 0))
+#!/usr/bin/env hy
+;; Copyright (c) Paul R. Tagliamonte <paultag@debian.org>, 2013 under the terms
+;; of the Expat license, a copy of which you have should have received with
+;; the source.
+
+
+(import sys)
+
+
+(defn parse-rfc822-file [path]
+  "Parse an RFC822 file"
+  (with-as (open path "r") fd
+    (parse-rfc822-stream fd)))
+
+
+(defn parse-rfc822-stream [fd]
+  "Parse an RFC822 stream"
+  (setv bits {})
+  (setv key null)
+  (for [line fd]
+    (if (in ":" line)
+        (do (setv line (.split line ":" 1))
+            (setv key (.strip (get line 0)))
+            (setv val (.strip (get line 1)))
+            (assoc bits key val))
+        (do
+         (if (= (.strip line) ".")
+             (assoc bits key (+ (get bits key) "\n"))
+             (assoc bits key (+ (get bits key) "\n" (.strip line)))))))
+  bits)
+
+
+(setv block (parse-rfc822-file (get sys.argv 1)))
+(setv source (get block "Source"))
+(print source "is a(n)" (get block "Description"))
+
+
+(import [sh [apt-cache]])
+(setv archive-block (parse-rfc822-stream (.show apt-cache source)))
+(print "The archive has version" (get archive-block "Version") "of" source)
+;;; Simple Flask application
+;;;
+;;; Requires to have Flask installed
+;;;
+;;; You can test it via:
+;;;
+;;;   $ curl 127.0.0.1:5151
+;;;   $ curl -X POST 127.0.0.1:5151/post
+;;;   $ curl -X POST 127.0.0.1:5151/both
+;;;   $ curl 127.0.0.1:5151/both
+
+(import [flask [Flask]])
+
+(require hy.contrib.meth)
+
+(setv app (Flask "__main__"))
+
+(route get-index "/" []
+  (str "Hy world!"))
+
+(post-route post-index "/post" []
+  (str "Hy post world!"))
+
+(route-with-methods both-index "/both" ["GET" "POST"] []
+  (str "Hy to both worlds!"))
+
+(apply app.run [] {"port" 5151})
+(import [gevent.server [StreamServer]])
+
+
+(defn handle [socket address]
+  (.send socket "Hello from Lisp!\n")
+  (for [x (range 5)] (.send socket (+ (str x) "\n")))
+  (.close socket))
+
+
+(setv server (StreamServer (, "127.0.0.1" 5000) handle))
+(.serve-forever server)
+;;; Hy tumblr printer.
+;;; Copyright (c) Paul R. Tagliamonte, 2013, MIT/Expat license.
+
+
+(import [lxml [etree]]
+        [sys [argv]])
+
+(try
+  (import [urllib.request [urlopen]])
+  (catch [ImportError]
+    (import [urllib2 [urlopen]])))
+
+(defn get-rss-feed-name [tumblr]
+  (.format "http://{0}.tumblr.com/rss" tumblr))
+
+(defn get-rss-feed [tumblr]
+  (.parse etree (urlopen (get-rss-feed-name tumblr))))
+
+(defn print-posts [tumblr]
+  (for [post (.xpath (get-rss-feed tumblr) "//item/title")]
+    (print post.text)))
+
+(if (slice argv 2)
+  (print-posts (get argv 2))
+  (print-posts "this-plt-life"))
+(import [concurrent.futures [ThreadPoolExecutor as-completed]]
+        [random [randint]]
+        [sh [sleep]])
+
+(defn task-to-do [] (sleep (randint 1 5)))
+
+
+(with-as (ThreadPoolExecutor 10) executor
+  (setv jobs (list-comp (.submit executor task-to-do) (x (range 0 10))))
+  (for [future (as-completed jobs)]
+    (.result future)))
+;; hello, rHy!
+
+
+(defn fib [n]
+  (if (<= n 2) n
+      (+ (fib (- n 1)) (fib (- n 2)))))
+
+
+(defn main [argv]
+  (for [x [1 2 3 4 5 6 7 8]]
+    (print (fib x)))
+  0)
+;; python-sh from hy
+
+(import [sh [cat grep]])
+(print "Words that end with `tag`:")
+(print (-> (cat "/usr/share/dict/words") (grep "-E" "tag$")))
+#!/usr/bin/env hy
+;; Copyright (c) Paul R. Tagliamonte <paultag@debian.org>, 2013 under the terms
+;; of the Expat license, a copy of which you should have received with
+;; the source.
+
+(import sys)
+(import [sunlight [openstates]]
+        [collections [Counter]])
+
+
+(def *state* (get sys.argv 1))
+
+
+(defn get-legislators [state]
+  (apply openstates.legislators [] {"state" state}))
+
+
+(defn get-party-breakdown [state]
+  (Counter (map
+            (lambda [x] (get x "party"))
+            (get-legislators state))))
+
+
+(print *state* "-" (get-party-breakdown *state*))
+;; To run this example, do the following:
+;;      $ hy get-page.hy http://docs.hylang.org/en/latest/
+;;
+;; At which point, you should see output like this:
+;;      2013-06-24 23:03:57-0700 [-] Log opened.
+;;      2013-06-24 23:03:57-0700 [-] Starting factory <HTTPClientFactory: http://docs.hylang.org/en/latest/>
+;;      2013-06-24 23:03:57-0700 [HTTPPageGetter,client] Byte count for the content of the HTTP page passed: 11835
+;;      2013-06-24 23:03:57-0700 [HTTPPageGetter,client] Preparing to stop reactor ...
+;;      2013-06-24 23:03:57-0700 [HTTPPageGetter,client] Stopping factory <HTTPClientFactory: http://docs.hylang.org/en/latest/>
+;;      2013-06-24 23:03:57-0700 [-] Main loop terminated.
+(import sys)
+
+(import [twisted.web.client [getPage]]
+        [twisted.internet [reactor]]
+        [twisted.python [log]])
+
+(defn get-page-size [result]
+  (print
+    (+ "Byte count for the content of the HTTP page passed: "
+       (str (len result)))))
+
+(defn log-error [err]
+  (log.msg err))
+
+(defn finish [ignore]
+  (log.msg "Preparing to stop reactor ...")
+  (reactor.stop))
+
+(defn get-page [url]
+  (let [[d (getPage url)]]
+    (d.addCallback get-page-size)
+    (d.addErrback log-error)
+    (d.addCallback finish)))
+
+(if (= __name__ "__main__")
+  (do
+    (log.startLogging sys.stdout)
+    (get-page (second sys.argv))
+    (reactor.run)))
+;;; Hy anaphoric macros
+;;
+;; Copyright (c) 2013 James King <james@agentultra.com>
+;;               2013 Paul R. Tagliamonte <tag@pault.ag>
+;;               2013 Abhishek L <abhishek.lekshmanan@gmail.com>
+;;
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+;;
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+;;
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+;;
+;;; These macros make writing functional programs more concise
+
+
+(defmacro ap-if (test-form &rest args)
+  `(let [[it ~test-form]] (if it ~@args)))
+
+
+(defmacro ap-each [lst &rest body]
+  "Evaluate the body form for each element in the list."
+  `(for [it ~lst] ~@body))
+
+
+(defmacro ap-each-while [lst form &rest body]
+  "Evalutate the body form for each element in the list while the
+  predicate form evaluates to True."
+  `(let [[p (lambda [it] ~form)]]
+     (for [it ~lst]
+       (if (p it)
+         ~@body
+         (break)))))
+
+
+(defmacro ap-map [form lst]
+  "Yield elements evaluated in the form for each element in the list."
+  (let [[v (gensym 'v)] [f (gensym 'f)]]
+    `(let [[~f (lambda [it] ~form)]]
+       (for [~v ~lst]
+         (yield (~f ~v))))))
+
+
+(defmacro ap-map-when [predfn rep lst]
+  "Yield elements evaluated for each element in the list when the
+  predicate function returns True."
+  `(let [[f (lambda [it] ~rep)]]
+     (for [it ~lst]
+       (if (~predfn it)
+         (yield (f it))
+         (yield it)))))
+
+
+(defmacro ap-filter [form lst]
+  "Yield elements returned when the predicate form evaluates to True."
+  `(let [[pred (lambda [it] ~form)]]
+     (for [val ~lst]
+       (if (pred val)
+         (yield val)))))
+
+
+(defmacro ap-reject [form lst]
+  "Yield elements returned when the predicate form evaluates to False"
+  `(ap-filter (not ~form) ~lst))
+
+
+(defmacro ap-dotimes [n &rest body]
+  "Execute body for side effects `n' times, with it bound from 0 to n-1"
+  (unless (numeric? n)
+    (raise (TypeError (.format "{0!r} is not a number" n))))
+  `(ap-each (range ~n) ~@body))
+
+
+(defmacro ap-first [predfn lst]
+  "Yield the first element that passes `predfn`"
+  (with-gensyms [n]
+    `(let [[~n None]]
+       (ap-each ~lst (when ~predfn (setv ~n it) (break)))
+       ~n)))
+
+
+(defmacro ap-last [predfn lst]
+  "Yield the last element that passes `predfn`"
+  (with-gensyms [n]
+    `(let [[~n None]]
+       (ap-each ~lst (none? ~n)
+                (when ~predfn
+                  (setv ~n it)))
+       ~n)))
+
+
+(defmacro ap-reduce [form lst &optional [initial-value None]]
+  "Anaphoric form of reduce, `acc' and `it' can be used for a form"
+  (if (none? initial-value)
+    `(let [[acc (car ~lst)]]
+       (ap-each (cdr ~lst) (setv acc ~form))
+       acc)
+    `(let [[acc ~initial-value]]
+       (ap-each ~lst (setv acc ~form))
+       acc)))
+(import inspect functools sys)
+
+
+(defn curry [func]
+  (let [[sig (.getargspec inspect func)]
+        [count (len sig.args)]]
+
+    (fn [&rest args]
+      (if (< (len args) count)
+        (apply functools.partial (+ [(curry func)] (list args)))
+        (apply func args)))))
+
+
+(defmacro fnc [args &rest body]
+  `(do (import hy.contrib.curry)
+       (with-decorator hy.contrib.curry.curry (fn [~@args] ~@body))))
+
+
+(defmacro defnc [name args &rest body]
+  `(def ~name (fnc [~@args] ~@body)))
+;;; Hy tail-call optimization
+;;
+;; Copyright (c) 2014 Clinton Dreisbach <clinton@dreisbach.us>
+;; Copyright (c) 2014 Paul R. Tagliamonte <tag@pault.ag>
+;;
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+;;
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+;;
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+;;
+;;; The loop/recur macro allows you to construct functions that use tail-call
+;;; optimization to allow arbitrary levels of recursion.
+
+(defn --trampoline-- [f]
+  "Wrap f function and make it tail-call optimized."
+  ;; Takes the function "f" and returns a wrapper that may be used for tail-
+  ;; recursive algorithms. Note that the returned function is not side-effect
+  ;; free and should not be called from anywhere else during tail recursion.
+
+  (setv result None)
+  ;; We have to put this in a list because of Python's
+  ;; weirdness around local variables.
+  ;; Assigning directly to it later would cause it to
+  ;; shadow in a new scope.
+  (setv active [False])
+  (setv accumulated [])
+
+  (fn [&rest args]
+    (.append accumulated args)
+    (when (not (first active))
+      (assoc active 0 True)
+      (while (> (len accumulated) 0)
+        (setv result (apply f (.pop accumulated))))
+      (assoc active 0 False)
+      result)))
+
+(defn recursive-replace [old-term new-term body]
+  "Recurses through lists of lists looking for old-term and replacing it with new-term."
+  ((type body)
+   (list-comp (cond
+               [(= term old-term) new-term]
+               [(instance? hy.HyList term)
+                (recursive-replace old-term new-term term)]
+               [True term]) [term body])))
+
+
+(defmacro/g! fnr [signature &rest body]
+  (let [[new-body (recursive-replace 'recur g!recur-fn body)]]
+    `(do
+      (import [hy.contrib.loop [--trampoline--]])
+      (with-decorator
+        --trampoline--
+        (def ~g!recur-fn (fn [~@signature] ~@new-body)))
+      ~g!recur-fn)))
+
+
+(defmacro defnr [name lambda-list &rest body]
+  (if (not (= (type name) HySymbol))
+    (macro-error name "defnr takes a name as first argument"))
+  `(setv ~name (fnr ~lambda-list ~@body)))
+
+
+(defmacro/g! loop [bindings &rest body]
+  ;; Use inside functions like so:
+  ;; (defun factorial [n]
+  ;;   (loop [[i n]
+  ;;          [acc 1]]
+  ;;         (if (= i 0)
+  ;;           acc
+  ;;           (recur (dec i) (* acc i)))))
+  ;;
+  ;; If recur is used in a non-tail-call position, None is returned, which
+  ;; causes chaos. Fixing this to detect if recur is in a tail-call position
+  ;; and erroring if not is a giant TODO.
+  (let [[fnargs (map (fn [x] (first x)) bindings)]
+        [initargs (map second bindings)]]
+    `(do (defnr ~g!recur-fn [~@fnargs] ~@body)
+         (~g!recur-fn ~@initargs))))
+;;; Hy on Meth
+;;; based on paultag's meth library to access a Flask based application
+
+(defmacro route-with-methods [name path methods params &rest code]
+  "Same as route but with an extra methods array to specify HTTP methods"
+  `(let [[deco (apply app.route [~path]
+                                    {"methods" ~methods})]]
+                 (with-decorator deco
+                   (defn ~name ~params 
+                     (progn ~@code)))))
+
+;; Some macro examples
+(defmacro route [name path params &rest code]
+  "Get request"
+  `(route-with-methods ~name ~path ["GET"] ~params ~@code))
+
+(defmacro post-route [name path params &rest code]
+  "Post request"
+  `(route-with-methods ~name ~path ["POST"] ~params ~@code))
+
+(defmacro put-route [name path params &rest code]
+  "Put request"
+  `(route-with-methods ~name ~path ["PUT"] ~params ~@code))
+
+(defmacro delete-route [name path params &rest code]
+  "Delete request"
+  `(route-with-methods ~name ~path ["DELETE"] ~params ~@code))
+;; Hy Arity-overloading
+;; Copyright (c) 2014 Morten Linderud <mcfoxax@gmail.com>
+
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+
+(import [collections [defaultdict]])
+(import [hy.models.string [HyString]])
+
+
+(defmacro defmulti [name &rest bodies]
+  (def comment (HyString))
+  (if (= (type (first bodies)) HyString)
+    (do (def comment (car bodies))
+        (def bodies (cdr bodies))))
+
+  (def ret `(do))
+  
+  (.append ret '(import [hy.contrib.dispatch [MultiDispatch]]))
+ 
+  (for [body bodies]
+    (def let-binds (car body))
+    (def body (cdr body))
+    (.append ret 
+        `(with-decorator MultiDispatch (defn ~name ~let-binds ~comment ~@body))))
+  ret)
+;;; Hy profiling macros
+;;
+;; Copyright (c) 2013 Paul R. Tagliamonte <tag@pault.ag>
+;;
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+;;
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+;;
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+;;
+;;; These macros make debugging where bottlenecks exist easier.
+
+
+(defmacro profile/calls [&rest body]
+  `(do
+     (import [pycallgraph [PyCallGraph]]
+             [pycallgraph.output [GraphvizOutput]])
+     (with* [(apply PyCallGraph [] {"output" (GraphvizOutput)})]
+           ~@body)))
+
+
+(defmacro/g! profile/cpu [&rest body]
+  " Profile a bit of code "
+  `(do
+     (import cProfile pstats)
+
+     (if-python2
+       (import [StringIO [StringIO]])
+       (import [io [StringIO]]))
+
+     (setv ~g!hy-pr (.Profile cProfile))
+     (.enable ~g!hy-pr)
+     (do ~@body)
+     (.disable ~g!hy-pr)
+     (setv ~g!hy-s (StringIO))
+     (setv ~g!hy-ps
+           (.sort-stats (apply pstats.Stats [~g!hy-pr] {"stream" ~g!hy-s})))
+     (.print-stats ~g!hy-ps)
+     (print (.getvalue ~g!hy-s))))
+;;; Hy AST walker
+;;
+;; Copyright (c) 2014  Gergely Nagy <algernon@madhouse-project.org>
+;;
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+;;
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+;;
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+
+(import [hy [HyExpression HyDict]]
+        [functools [partial]])
+
+(defn walk [inner outer form]
+  "Traverses form, an arbitrary data structure. Applies inner to each
+  element of form, building up a data structure of the same type.
+  Applies outer to the result."
+  (cond
+   [(instance? HyExpression form)
+    (outer (HyExpression (map inner form)))]
+   [(instance? HyDict form)
+    (HyDict (outer (HyExpression (map inner form))))]
+   [(cons? form)
+    (outer (cons (inner (first form))
+                 (inner (rest form))))]
+   [(instance? list form)
+    ((type form) (outer (HyExpression (map inner form))))]
+   [true (outer form)]))
+
+(defn postwalk [f form]
+  "Performs depth-first, post-order traversal of form. Calls f on each
+  sub-form, uses f's return value in place of the original."
+  (walk (partial postwalk f) f form))
+
+(defn prewalk [f form]
+  "Performs depth-first, pre-order traversal of form. Calls f on each
+  sub-form, uses f's return value in place of the original."
+  (walk (partial prewalk f) identity (f form)))
+
+(defn macroexpand-all [form]
+  "Recursively performs all possible macroexpansions in form."
+  (prewalk (fn [x]
+             (if (instance? HyExpression x)
+               (macroexpand x)
+               x))
+           form))
+;;; Hy bootstrap macros
+;;
+;; Copyright (c) 2013 Nicolas Dandrimont <nicolas.dandrimont@crans.org>
+;; Copyright (c) 2013 Paul Tagliamonte <paultag@debian.org>
+;; Copyright (c) 2013 Konrad Hinsen <konrad.hinsen@fastmail.net>
+;;
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+;;
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+;;
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+;;
+;;; These macros are the essential hy macros.
+;;; They are automatically required everywhere, even inside hy.core modules.
+
+
+(defmacro macro-error [location reason]
+  "error out properly within a macro"
+  `(raise (hy.errors.HyMacroExpansionError ~location ~reason)))
+
+
+(defmacro defmacro-alias [names lambda-list &rest body]
+  "define one macro with several names"
+  (setv ret `(do))
+  (for* [name names]
+    (.append ret
+             `(defmacro ~name ~lambda-list ~@body)))
+  ret)
+
+
+(defmacro-alias [defn defun] [name lambda-list &rest body]
+  "define a function `name` with signature `lambda-list` and body `body`"
+  (if (not (= (type name) HySymbol))
+    (macro-error name "defn/defun takes a name as first argument"))
+  `(setv ~name (fn ~lambda-list ~@body)))
+
+
+(defmacro let [variables &rest body]
+  "Execute `body` in the lexical context of `variables`"
+  (setv macroed_variables [])
+  (if (not (isinstance variables HyList))
+    (macro-error variables "let lexical context must be a list"))
+  (for* [variable variables]
+    (if (isinstance variable HyList)
+      (do
+       (if (!= (len variable) 2)
+         (macro-error variable "let variable assignments must contain two items"))
+       (.append macroed-variables `(setv ~(get variable 0) ~(get variable 1))))
+      (.append macroed-variables `(setv ~variable None))))
+  `((fn []
+     ~@macroed-variables
+     ~@body)))
+
+
+(defmacro if-python2 [python2-form python3-form]
+  "If running on python2, execute python2-form, else, execute python3-form"
+  (import sys)
+  (if (< (get sys.version_info 0) 3)
+    python2-form
+    python3-form))
+;; Copyright (c) 2013 Paul Tagliamonte <paultag@debian.org>
+;; Copyright (c) 2013 Bob Tolbert <bob@tolbert.org>
+
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+
+;;;; This contains some of the core Hy functions used
+;;;; to make functional programming slightly easier.
+;;;;
+
+(import itertools)
+(import functools)
+(import collections)
+(import sys)
+(import [hy._compat [long-type]]) ; long for python2, int for python3
+(import [hy.models.cons [HyCons]]
+        [hy.models.keyword [HyKeyword *keyword-prefix*]])
+(import [hy.lex [LexException PrematureEndOfInput tokenize]])
+
+(defn _numeric-check [x]
+  (if (not (numeric? x))
+    (raise (TypeError (.format "{0!r} is not a number" x)))))
+
+(defn butlast [coll]
+  "Returns coll except of last element."
+  (itertools.islice coll 0 (dec (len coll))))
+
+(defn coll? [coll]
+  "Checks whether item is a collection"
+  (and (iterable? coll) (not (string? coll))))
+
+(defn cons [a b]
+  "Return a fresh cons cell with car = a and cdr = b"
+  (HyCons a b))
+
+(defn cons? [c]
+  "Check whether c can be used as a cons object"
+  (instance? HyCons c))
+
+(defn keyword? [k]
+  "Check whether k is a keyword"
+  (and (instance? (type :foo) k)
+       (.startswith k (get :foo 0))))
+
+
+(defn dec [n]
+  "Decrement n by 1"
+  (_numeric-check n)
+  (- n 1))
+
+(defn disassemble [tree &optional [codegen false]]
+  "Return the python AST for a quoted Hy tree as a string.
+   If the second argument is true, generate python code instead."
+  (import astor)
+  (import hy.compiler)
+
+  (fake-source-positions tree)
+  (setv compiled (hy.compiler.hy_compile tree (calling-module-name)))
+  ((if codegen
+            astor.codegen.to_source
+            astor.dump)
+          compiled))
+
+(defn distinct [coll]
+  "Return a generator from the original collection with duplicates
+   removed"
+  (let [[seen (set)] [citer (iter coll)]]
+    (for* [val citer]
+      (if (not_in val seen)
+        (do
+         (yield val)
+         (.add seen val))))))
+
+(if-python2
+  (do
+    (setv filterfalse itertools.ifilterfalse)
+    (setv zip_longest itertools.izip_longest)
+    (setv filter itertools.ifilter)
+    (setv map itertools.imap)
+    (setv zip itertools.izip)
+    (setv range xrange)
+    (setv input raw_input)
+    (setv reduce reduce))
+  (do
+    (setv reduce functools.reduce)
+    (setv filterfalse itertools.filterfalse)
+    (setv zip_longest itertools.zip_longest)
+    ; Someone can import these directly from `hy.core.language`;
+    ; we'll make some duplicates.
+    (setv filter filter)
+    (setv map map)
+    (setv zip zip)
+    (setv range range)
+    (setv input input)))
+
+(setv cycle itertools.cycle)
+(setv repeat itertools.repeat)
+(setv drop-while itertools.dropwhile)
+(setv take-while itertools.takewhile)
+(setv zipwith map)
+(setv remove filterfalse)
+
+(defn drop [count coll]
+  "Drop `count` elements from `coll` and yield back the rest"
+  (itertools.islice coll count nil))
+
+(defn empty? [coll]
+  "Return True if `coll` is empty"
+  (= 0 (len coll)))
+
+(defn even? [n]
+  "Return true if n is an even number"
+  (_numeric-check n)
+  (= (% n 2) 0))
+
+(defn every? [pred coll]
+  "Return true if (pred x) is logical true for every x in coll, else false"
+  (all (map pred coll)))
+
+(defn fake-source-positions [tree]
+  "Fake the source positions for a given tree"
+  (if (coll? tree)
+    (for* [subtree tree]
+          (fake-source-positions subtree)))
+  (for* [attr '[start-line end-line start-column end-column]]
+        (if (not (hasattr tree attr))
+          (setattr tree attr 1))))
+
+(defn flatten [coll]
+  "Return a single flat list expanding all members of coll"
+  (if (coll? coll)
+    (_flatten coll [])
+    (raise (TypeError (.format "{0!r} is not a collection" coll)))))
+
+(defn _flatten [coll result]
+  (if (coll? coll)
+    (do (for* [b coll]
+          (_flatten b result)))
+    (.append result coll))
+  result)
+
+(defn float? [x]
+  "Return True if x is float"
+  (isinstance x float))
+
+(import [threading [Lock]])
+(setv _gensym_counter 1234)
+(setv _gensym_lock (Lock))
+
+(defn gensym [&optional [g "G"]]
+  (let [[new_symbol None]]
+    (global _gensym_counter)
+    (global _gensym_lock)
+    (.acquire _gensym_lock)
+    (try (do (setv _gensym_counter (inc _gensym_counter))
+             (setv new_symbol (HySymbol (.format ":{0}_{1}" g _gensym_counter))))
+         (finally (.release _gensym_lock)))
+    new_symbol))
+
+(defn calling-module-name [&optional [n 1]]
+  "Get the name of the module calling `n` levels up the stack from the
+  `calling-module-name` function call (by default, one level up)"
+  (import inspect)
+
+  (setv f (get (.stack inspect) (+ n 1) 0))
+  (get f.f_globals "__name__"))
+
+(defn first [coll]
+  "Return first item from `coll`"
+  (nth coll 0))
+
+(defn identity [x]
+  "Returns the argument unchanged"
+  x)
+
+(defn inc [n]
+  "Increment n by 1"
+  (_numeric-check n)
+  (+ n 1))
+
+(defn instance? [klass x]
+  (isinstance x klass))
+
+(defn integer [x]
+  "Return Hy kind of integer"
+  (long-type x))
+
+(defn integer? [x]
+  "Return True if x in an integer"
+  (isinstance x (, int long-type)))
+
+(defn integer-char? [x]
+  "Return True if char `x` parses as an integer"
+  (try
+    (integer? (int x))
+    (catch [e ValueError] False)
+    (catch [e TypeError] False)))
+
+(defn interleave [&rest seqs]
+  "Return an iterable of the first item in each of seqs, then the second etc."
+  (itertools.chain.from_iterable (apply zip seqs)))
+
+(defn interpose [item seq]
+  "Return an iterable of the elements of seq separated by item"
+  (drop 1 (interleave (itertools.repeat item) seq)))
+
+(defn iterable? [x]
+  "Return true if x is iterable"
+  (isinstance x collections.Iterable))
+
+(defn iterate [f x]
+  (setv val x)
+  (while true
+    (yield val)
+    (setv val (f val))))
+
+(defn iterator? [x]
+  "Return true if x is an iterator"
+  (isinstance x collections.Iterator))
+
+(defn list* [hd &rest tl]
+  "Return a dotted list construed from the elements of the argument"
+  (if (not tl)
+    hd
+    (cons hd (apply list* tl))))
+
+(defn macroexpand [form]
+  "Return the full macro expansion of form"
+  (import hy.macros)
+
+  (setv name (calling-module-name))
+  (hy.macros.macroexpand form name))
+
+(defn macroexpand-1 [form]
+  "Return the single step macro expansion of form"
+  (import hy.macros)
+
+  (setv name (calling-module-name))
+  (hy.macros.macroexpand-1 form name))
+
+(defn merge-with [f &rest maps]
+  "Returns a map that consists of the rest of the maps joined onto
+   the first. If a key occurs in more than one map, the mapping(s)
+   from the latter (left-to-right) will be combined with the mapping in
+   the result by calling (f val-in-result val-in-latter)."
+  (if (any maps)
+    (let [[merge-entry (fn [m e]
+			 (let [[k (get e 0)] [v (get e 1)]]
+			   (if (in k m)
+			     (assoc m k (f (get m k) v))
+			     (assoc m k v)))
+			 m)]
+	  [merge2 (fn [m1 m2]
+		    (reduce merge-entry (.items m2) (or m1 {})))]]
+      (reduce merge2 maps))))
+
+(defn neg? [n]
+  "Return true if n is < 0"
+  (_numeric-check n)
+  (< n 0))
+
+(defn none? [x]
+  "Return true if x is None"
+  (is x None))
+
+(defn nil? [x]
+  "Return true if x is nil (None)"
+  (is x None))
+
+(defn numeric? [x]
+  (import numbers)
+  (instance? numbers.Number x))
+
+(defn nth [coll n &optional [default nil]]
+  "Return nth item in collection or sequence, counting from 0.
+   Return nil if out of bounds unless specified otherwise."
+  (next (drop n coll) default))
+
+(defn odd? [n]
+  "Return true if n is an odd number"
+  (_numeric-check n)
+  (= (% n 2) 1))
+
+(defn pos? [n]
+  "Return true if n is > 0"
+  (_numeric_check n)
+  (> n 0))
+
+(defn rest [coll]
+  "Get all the elements of a coll, except the first."
+  (drop 1 coll))
+
+(defn repeatedly [func]
+  "Yield result of running func repeatedly"
+  (while true
+    (yield (func))))
+
+(defn second [coll]
+  "Return second item from `coll`"
+  (nth coll 1))
+
+(defn some [pred coll]
+  "Return the first logical true value of (pred x) for any x in coll, else nil"
+  (first (filter nil (map pred coll))))
+
+(defn string [x]
+  "Cast x as current string implementation"
+  (if-python2
+   (unicode x)
+   (str x)))
+
+(defn string? [x]
+  "Return True if x is a string"
+  (if-python2
+    (isinstance x (, str unicode))
+    (isinstance x str)))
+
+(defn take [count coll]
+  "Take `count` elements from `coll`, or the whole set if the total
+    number of entries in `coll` is less than `count`."
+  (itertools.islice coll nil count))
+
+(defn take-nth [n coll]
+  "Return every nth member of coll
+     raises ValueError for (not (pos? n))"
+  (if (pos? n)
+    (let [[citer (iter coll)] [skip (dec n)]]
+      (for* [val citer]
+        (yield val)
+        (for* [_ (range skip)]
+          (next citer))))
+    (raise (ValueError "n must be positive"))))
+
+(defn zero? [n]
+  "Return true if n is 0"
+  (_numeric_check n)
+  (= n 0))
+
+(defn read [&optional [from-file sys.stdin]
+                      [eof ""]]
+  "Read from input and returns a tokenized string.
+   Can take a given input buffer to read from"
+  (def buff "")
+  (while true
+    (def inn (str (.read from-file 1)))
+    (if (= inn eof)
+      (throw (EOFError "Reached end of file" )))
+    (setv buff (+ buff inn))
+    (try
+      (def parsed (first (tokenize buff)))
+      (except [e [LexException PrematureEndOfInput IndexError]])
+      (else (if parsed (break)))))
+    parsed)
+
+
+(defun Botsbuildbots () (Botsbuildbots))
+
+(defn zipwith [func &rest lists]
+  "Zip the contents of several lists and map a function to the result"
+  (do
+    (import functools)
+    (map (functools.partial (fn [f args] (apply f args)) func) (apply zip lists))))
+
+(defn hyify [text]
+  "Convert text to match hy identifier"
+  (.replace (string text) "_" "-"))
+
+(defn keyword [value]
+  "Create a keyword from the given value. Strings numbers and even objects
+  with the __name__ magic will work"
+  (if (and (string? value) (value.startswith *keyword-prefix*))
+    (hyify value)
+    (if (string? value)
+      (HyKeyword (+ ":" (hyify value)))
+      (try
+        (hyify (.__name__ value))
+        (catch [] (HyKeyword (+ ":" (string value))))))))
+
+(defn name [value]
+  "Convert the given value to a string. Keyword special character will be stripped.
+  String will be used as is. Even objects with the __name__ magic will work"
+  (if (and (string? value) (value.startswith *keyword-prefix*))
+    (hyify (slice value 2))
+    (if (string? value)
+      (hyify value)
+      (try
+        (hyify (. value __name__))
+        (catch [] (string value))))))
+
+(def *exports* '[Botsbuildbots
+                 butlast calling-module-name coll? cons cons? cycle
+                 dec distinct disassemble drop drop-while empty? even?
+                 every? first filter filterfalse flatten float? gensym identity
+                 inc input instance? integer integer? integer-char? interleave
+                 interpose iterable? iterate iterator? keyword keyword? list*
+                 macroexpand macroexpand-1 map merge-with name neg? nil? none?
+                 nth numeric? odd? pos? range read remove repeat repeatedly
+                 rest reduce second some string string? take take-nth
+                 take-while zero? zip zip_longest zipwith])
+;;; Hy core macros
+;;
+;; Copyright (c) 2013 Nicolas Dandrimont <nicolas.dandrimont@crans.org>
+;; Copyright (c) 2013 Paul Tagliamonte <paultag@debian.org>
+;; Copyright (c) 2013 Konrad Hinsen <konrad.hinsen@fastmail.net>
+;;
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+;;
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+;;
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+;;
+;;; These macros form the hy language
+;;; They are automatically required in every module, except inside hy.core
+
+
+(import [hy.models.list [HyList]]
+        [hy.models.symbol [HySymbol]]
+        [hy._compat [PY33 PY34]])
+
+
+(defmacro with [args &rest body]
+  "shorthand for nested for* loops:
+  (with [[x foo] [y bar]] baz) ->
+  (with* [x foo]
+    (with* [y bar]
+      baz))"
+
+  (if (not (empty? args))
+    (let [[primary (.pop args 0)]]
+      (if (isinstance primary HyList)
+        ;;; OK. if we have a list, we can go ahead and unpack that
+        ;;; as the argument to with.
+        `(with* [~@primary] (with ~args ~@body))
+        ;;; OK, let's just give it away. This may not be something we
+        ;;; can do, but that's really the programmer's problem.
+        `(with* [~primary] (with ~args ~@body))))
+      `(do ~@body)))
+
+
+(defmacro car [thing]
+  "Get the first element of a list/cons"
+  `(get ~thing 0))
+
+
+(defmacro cdr [thing]
+  "Get all the elements of a thing, except the first"
+  `(slice ~thing 1))
+
+
+(defmacro cond [&rest branches]
+  "shorthand for nested ifs:
+   (cond [foo bar] [baz quux]) ->
+   (if foo
+     bar
+     (if baz
+       quux))"
+  (setv branches (iter branches))
+  (setv branch (next branches))
+  (defn check-branch [branch]
+    "check `cond` branch for validity, return the corresponding `if` expr"
+    (if (not (= (type branch) HyList))
+      (macro-error branch "cond branches need to be a list"))
+    (if (!= (len branch) 2)
+      (macro-error branch "cond branches need two items: a test and a code branch"))
+    (setv (, test thebranch) branch)
+    `(if ~test ~thebranch))
+
+  (setv root (check-branch branch))
+  (setv latest-branch root)
+
+  (for* [branch branches]
+    (setv cur-branch (check-branch branch))
+    (.append latest-branch cur-branch)
+    (setv latest-branch cur-branch))
+  root)
+
+
+(defmacro for [args &rest body]
+  "shorthand for nested for loops:
+  (for [x foo
+        y bar]
+    baz) ->
+  (for* [x foo]
+    (for* [y bar]
+      baz))"
+  (cond 
+   [(odd? (len args))
+    (macro-error args "`for' requires an even number of args.")]
+   [(empty? body)
+    (macro-error None "`for' requires a body to evaluate")]
+   [(empty? args) `(do ~@body)]
+   [(= (len args) 2)  `(for* [~@args] ~@body)]
+   [true 
+    (let [[alist (slice args 0 nil 2)]]
+      `(for* [(, ~@alist) (genexpr (, ~@alist) [~@args])] ~@body))]))
+
+
+(defmacro -> [head &rest rest]
+  ;; TODO: fix the docstring by someone who understands this
+  (setv ret head)
+  (for* [node rest]
+    (if (not (isinstance node HyExpression))
+      (setv node `(~node)))
+    (.insert node 1 ret)
+    (setv ret node))
+  ret)
+
+
+(defmacro doto [form &rest expressions]
+  "Performs a sequence of potentially mutating actions
+   on an initial object, returning the resulting object"
+  (setv f (gensym))
+  (defn build-form [expression]
+    (if (isinstance expression HyExpression)
+      `(~(first expression) ~f ~@(rest expression))
+      `(~expression ~f)))
+  `(let [[~f ~form]]
+     ~@(map build-form expressions)
+     ~f))
+
+(defmacro ->> [head &rest rest]
+  ;; TODO: fix the docstring by someone who understands this
+  (setv ret head)
+  (for* [node rest]
+    (if (not (isinstance node HyExpression))
+      (setv node `(~node)))
+    (.append node ret)
+    (setv ret node))
+  ret)
+
+
+(defmacro if-not [test not-branch &optional [yes-branch nil]]
+  "Like `if`, but execute the first branch when the test fails"
+  (if (nil? yes-branch)
+    `(if (not ~test) ~not-branch)
+    `(if (not ~test) ~not-branch ~yes-branch)))
+
+
+(defmacro-alias [lisp-if lif] [test &rest branches]
+  "Like `if`, but anything that is not None/nil is considered true."
+  `(if (is-not ~test nil) ~@branches))
+
+
+(defmacro when [test &rest body]
+  "Execute `body` when `test` is true"
+  `(if ~test (do ~@body)))
+
+
+(defmacro unless [test &rest body]
+  "Execute `body` when `test` is false"
+  `(if-not ~test (do ~@body)))
+
+
+(defmacro with-gensyms [args &rest body]
+  `(let ~(HyList (map (fn [x] `[~x (gensym '~x)]) args))
+    ~@body))
+
+(defmacro defmacro/g! [name args &rest body]
+  (let [[syms (list (distinct (filter (fn [x] (and (hasattr x "startswith") (.startswith x "g!"))) (flatten body))))]]
+    `(defmacro ~name [~@args]
+       (let ~(HyList (map (fn [x] `[~x (gensym (slice '~x 2))]) syms))
+            ~@body))))
+
+
+(defmacro defmain [args &rest body]
+  "Write a function named \"main\" and do the if __main__ dance"
+  (let [[retval (gensym)]]
+    `(do
+      (defn main [~@args]
+        ~@body)
+
+      (when (= --name-- "__main__")
+        (import sys)
+        (setv ~retval (apply main sys.argv))
+        (if (integer? ~retval)
+          (sys.exit ~retval))))))
+
+
+(defmacro-alias [defn-alias defun-alias] [names lambda-list &rest body]
+  "define one function with several names"
+  (let [[main (first names)]
+        [aliases (rest names)]]
+    (setv ret `(do (defn ~main ~lambda-list ~@body)))
+    (for* [name aliases]
+          (.append ret
+                   `(setv ~name ~main)))
+    ret))
+
+(defmacro Botsbuildbots []
+  "Build bots, repeatedly.^W^W^WPrint the AUTHORS, forever."
+  `(try
+    (do
+     (import [requests])
+
+     (let [[r (requests.get
+               "https://raw.githubusercontent.com/hylang/hy/master/AUTHORS")]]
+       (repeat r.text)))
+    (catch [e ImportError]
+      (repeat "Botsbuildbots requires `requests' to function."))))
+;; Copyright (c) 2014 Paul Tagliamonte <paultag@debian.org>
+;; Copyright (c) 2014 James King <james@agentultra.com>
+
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+
+;;;; Hy shadow functions
+
+(import operator)
+
+
+(defn + [&rest args]
+  "Shadow + operator for when we need to import / map it against something"
+  (let [[count (len args)]]
+    (if (zero? count)
+      (raise (TypeError "Need at least 1 argument to add/concatenate"))
+      (if (= count 1)
+        (get args 0)
+        (reduce operator.add args)))))
+
+
+(defn - [&rest args]
+  "Shadow - operator for when we need to import / map it against something"
+  (let [[count (len args)]]
+    (if (= count 0)
+      (raise (TypeError "Need at least 1 argument to subtract"))
+      (if (= count 1)
+        (- (get args 0))
+        (reduce operator.sub args)))))
+
+
+(defn * [&rest args]
+  "Shadow * operator for when we need to import / map it against something"
+  (if (= (len args) 0)
+    1  ; identity
+    (reduce operator.mul args)))
+
+
+(defn / [&rest args]
+  "Shadow / operator for when we need to import / map it against something"
+  (let [[count (len args)]]
+    (if (= count 0)
+      (raise (TypeError "Need at least 1 argument to divide"))
+      (if (= count 1)
+        (operator.truediv 1 (get args 0))
+        (reduce operator.truediv args)))))
+
+
+(setv *exports* ['+ '- '* '/])
+;; You need to install the requests package first
+
+(import os.path)
+(import requests)
+
+
+(setv *api-url* "https://api.github.com/{}")
+(setv *rst-format* "* `{} <{}>`_")
+(setv *missing-names* {"khinsen" "Konrad Hinsen"})
+;; We have three concealed members on the hylang organization
+;; and GitHub only shows public members if the requester is not
+;; an owner of the organization.
+(setv *concealed-members* [(, "aldeka" "Karen Rustad")
+                           (, "tuturto" "Tuukka Turto")
+                           (, "cndreisbach" "Clinton N. Dreisbach")])
+
+(defn get-dev-name [login]
+  (setv name (get (.json (requests.get (.format *api-url* (+ "users/" login)))) "name"))
+  (if-not name
+    (.get *missing-names* login)
+    name))
+
+(setv coredevs (requests.get (.format *api-url* "orgs/hylang/members")))
+
+(setv result (set))
+(for [dev (.json coredevs)]
+  (result.add (.format *rst-format* (get-dev-name (get dev "login"))
+                       (get dev "html_url"))))
+
+(for [(, login name) *concealed-members*]
+  (result.add (.format *rst-format* name (+ "https://github.com/" login))))
+
+(setv filename (os.path.abspath (os.path.join os.path.pardir
+                                              "docs" "coreteam.rst")))
+
+(with [[fobj (open filename "w+")]]
+  (fobj.write (+ (.join "\n" result) "\n")))
+;;;
+;;;
+
+(import [hy [HyExpression HySymbol HyString]])
+
+
+(defn test-basic-quoting []
+  (assert (= (type (quote (foo bar))) HyExpression))
+  (assert (= (type (quote foo)) HySymbol))
+  (assert (= (type (quote "string")) HyString)))
+(defn test-cons-mutability []
+  "Test the mutability of conses"
+  (setv tree (cons (cons 1 2) (cons 2 3)))
+  (setv (car tree) "foo")
+  (assert (= tree (cons "foo" (cons 2 3))))
+  (setv (cdr tree) "bar")
+  (assert (= tree (cons "foo" "bar"))))
+
+
+(defn test-cons-quoting []
+  "Test quoting of conses"
+  (assert (= (cons 1 2) (quote (1 . 2))))
+  (assert (= (quote foo) (car (quote (foo . bar)))))
+  (assert (= (quote bar) (cdr (quote (foo . bar))))))
+
+
+(defn test-cons-behavior []
+  "NATIVE: test the behavior of cons is consistent"
+  (defn t= [a b]
+    (and (= a b) (= (type a) (type b))))
+  (assert (t= (cons 1 2) '(1 . 2)))
+  (assert (t= (cons 1 nil) '(1)))
+  (assert (t= (cons nil 2) '(nil . 2)))
+  (assert (t= (cons 1 []) [1]))
+  (setv tree (cons (cons 1 2) (cons 2 3)))
+  (assert (t= (car tree) (cons 1 2)))
+  (assert (t= (cdr tree) (cons 2 3))))
+
+
+(defn test-cons-iteration []
+  "NATIVE: test the iteration behavior of cons"
+  (setv x '(0 1 2 3 4 . 5))
+  (setv it (iter x))
+  (for* [i (range 6)]
+    (assert (= i (next it))))
+  (assert
+   (= 'success
+      (try
+       (do
+        (next it)
+        'failurenext)
+       (except [e TypeError] (if (= e.args (, "Iteration on malformed cons"))
+                               'success
+                               'failureexc))
+       (except [e Exception] 'failureexc2)))))
+
+
+(defn test-cons? []
+  "NATIVE: test behavior of cons?"
+  (assert (cons? (cons 1 2)))
+  (assert (cons? '(1 . 2)))
+  (assert (cons? '(1 2 3 . 4)))
+  (assert (cons? (list* 1 2 3)))
+  (assert (not (cons? (cons 1 [2]))))
+  (assert (not (cons? (list* 1 nil)))))
+
+
+(defn test-list* []
+  "NATIVE: test behavior of list*"
+  (assert (= 1 (list* 1)))
+  (assert (= (cons 1 2) (list* 1 2)))
+  (assert (= (cons 1 (cons 2 3)) (list* 1 2 3)))
+  (assert (= '(1 2 3 4 . 5) (list* 1 2 3 4 5))))
+;; Copyright (c) 2013 James King <james@agentultra.com>
+
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+
+;;;; some simple helpers
+
+(require hy.contrib.anaphoric)
+
+(defn assert-true [x]
+  (assert (= True x)))
+
+(defn assert-false [x]
+  (assert (= False x)))
+
+(defn assert-equal [x y]
+  (assert (= x y)))
+
+
+(defn test-ap-if []
+  "NATIVE: testing anaphoric if"
+  (ap-if true (assert-true it))
+  (ap-if false true (assert-false it)))
+
+(defn test-ap-each []
+  "NATIVE: testing anaphoric each"
+  (setv res [])
+  (ap-each [1 2 3 4] (.append res it))
+  (assert-equal res [1 2 3 4]))
+
+(defn test-ap-each-while []
+  "NATIVE: testing anaphoric each-while"
+  (setv res [])
+  (ap-each-while [2 2 4 3 4 5 6] (even? it) (.append res it))
+  (assert-equal res [2 2 4]))
+
+(defn test-ap-map []
+  "NATIVE: testing anaphoric map"
+  (assert-equal (list (ap-map (* it 3) [1 2 3]))
+                [3 6 9])
+  (assert-equal (list (ap-map (* it 3) []))
+                [])
+  (assert-equal (let [[v 1] [f 1]] (list (ap-map (it v f) [(fn [a b] (+ a b))])))
+                [2]))
+
+(defn test-ap-map-when []
+  "NATIVE: testing anaphoric map-when"
+  (assert-equal (list (ap-map-when even? (* it 2) [1 2 3 4]))
+                [1 4 3 8]))
+
+(defn test-ap-filter []
+  "NATIVE: testing anaphoric filter"
+  (assert-equal (list (ap-filter (> it 2) [1 2 3 4]))
+                [3 4])
+  (assert-equal (list (ap-filter (even? it) [1 2 3 4]))
+                [2 4]))
+
+(defn test-ap-reject []
+  "NATIVE: testing anaphoric filter"
+  (assert-equal (list (ap-reject (> it 2) [1 2 3 4]))
+                [1 2])
+  (assert-equal (list (ap-reject (even? it) [1 2 3 4]))
+                [1 3]))
+
+(defn test-ap-dotimes []
+  "NATIVE: testing anaphoric dotimes"
+  (assert-equal (let [[n []]] (ap-dotimes 3 (.append n 3)) n)
+		[3 3 3])
+  (assert-equal (let [[n []]] (ap-dotimes 3 (.append n it)) n)
+		[0 1 2]))
+
+(defn test-ap-first []
+  "NATIVE: testing anaphoric first"
+  (assert-equal (ap-first (> it 5) (range 10)) 6)
+  (assert-equal (ap-first (even? it) [1 2 3 4]) 2)
+  (assert-equal (ap-first (> it 10) (range 10)) None))
+
+(defn test-ap-last []
+  "NATIVE: testing anaphoric last"
+  (assert-equal (ap-last (> it 5) (range 10)) 9)
+  (assert-equal (ap-last (even? it) [1 2 3 4]) 4)
+  (assert-equal (ap-last (> it 10) (range 10)) None))
+
+(defn test-ap-reduce []
+  "NATIVE: testing anaphoric reduce"
+  (assert-equal (ap-reduce (* acc it) [1 2 3]) 6)
+  (assert-equal (ap-reduce (* acc it) [1 2 3] 6) 36)
+  (assert-equal (ap-reduce (+ acc " on " it) ["Hy" "meth"])
+		"Hy on meth")
+  (assert-equal (ap-reduce (+ acc it) [] 1) 1))
+(require hy.contrib.curry)
+
+
+(defnc s [x y z] ((x z) (y z)))  ; λxyz.xz(yz)
+(defnc k [x] (fn [y] x))  ; λx.λy.x
+(defnc i [x] x)  ;; λx.x 
+
+(defnc succ [n] (+ n 1))
+
+
+(defn test-curry []
+  (assert (= 16 (((((s ((((k s) k) i) i)) (i i)) ((i (i i))
+    ((((k s) i) ((s (k s)) k)) i))) succ) 0))))
+(require hy.contrib.loop)
+(import sys)
+
+(defn tco-sum [x y]
+  (loop [[x x] [y y]]
+        (cond
+         [(> y 0) (recur (inc x) (dec y))]
+         [(< y 0) (recur (dec x) (inc y))]
+         [True x])))
+
+(defn non-tco-sum [x y]
+  (cond
+   [(> y 0) (inc (non-tco-sum x (dec y)))]
+   [(< y 0) (dec (non-tco-sum x (inc y)))]
+   [True x]))
+
+(defn test-loop []
+  ;; non-tco-sum should fail
+  (try
+   (setv n (non-tco-sum 100 10000))
+   (catch [e RuntimeError]
+     (assert true))
+   (else
+    (assert false)))
+
+  ;; tco-sum should not fail
+  (try
+   (setv n (tco-sum 100 10000))
+   (catch [e RuntimeError]
+     (assert false))
+   (else
+    (assert (= n 10100)))))
+
+(defn test-recur-in-wrong-loc []
+  (defn bad-recur [n]
+    (loop [[i n]]
+          (if (= i 0)
+            0
+            (inc (recur (dec i))))))
+
+  (try
+   (bad-recur 3)
+   (catch [e TypeError]
+     (assert true))
+   (else
+    (assert false))))
+(require hy.contrib.meth)
+
+(defclass FakeMeth []
+  "Mocking decorator class"
+  [[rules {}]
+   [route (fn [self rule &kwargs options]
+            (fn [f]
+              (assoc self.rules rule (, f options))
+              f))]])
+
+
+(defn test_route []
+  (let [[app (FakeMeth)]]
+    (route get-index "/" []  (str "Hy world!"))
+    (setv app-rules (getattr app "rules"))
+    (assert (in "/" app-rules))
+    (let [[(, rule-fun rule-opt) (get app-rules "/")]]
+      (assert (not (empty? rule-opt)))
+      (assert (in "GET" (get rule-opt "methods")))
+      (assert (= (getattr rule-fun "__name__") "get_index"))
+      (assert (= "Hy world!" (rule-fun))))))
+
+(defn test_post_route []
+  (let [[app (FakeMeth)]]
+    (post-route get-index "/" []  (str "Hy world!"))
+    (setv app-rules (getattr app "rules"))
+    (assert (in "/" app-rules))
+    (let [[(, rule-fun rule-opt) (get app-rules "/")]]
+      (assert (not (empty? rule-opt)))
+      (assert (in "POST" (get rule-opt "methods")))
+      (assert (= (getattr rule-fun "__name__") "get_index"))
+      (assert (= "Hy world!" (rule-fun))))))
+
+(defn test_put_route []
+  (let [[app (FakeMeth)]]
+    (put-route get-index "/" []  (str "Hy world!"))
+    (setv app-rules (getattr app "rules"))
+    (assert (in "/" app-rules))
+    (let [[(, rule-fun rule-opt) (get app-rules "/")]]
+      (assert (not (empty? rule-opt)))
+      (assert (in "PUT" (get rule-opt "methods")))
+      (assert (= (getattr rule-fun "__name__") "get_index"))
+      (assert (= "Hy world!" (rule-fun))))))
+
+(defn test_delete_route []
+  (let [[app (FakeMeth)]]
+    (delete-route get-index "/" []  (str "Hy world!"))
+    (setv app-rules (getattr app "rules"))
+    (assert (in "/" app-rules))
+    (let [[(, rule-fun rule-opt) (get app-rules "/")]]
+      (assert (not (empty? rule-opt)))
+      (assert (in "DELETE" (get rule-opt "methods")))
+      (assert (= (getattr rule-fun "__name__") "get_index"))
+      (assert (= "Hy world!" (rule-fun))))))
+;; Copyright (c) 2014 Morten Linderud <mcfoxax@gmail.com>
+ 
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+
+(require hy.contrib.multi)
+
+
+(defn test-basic-multi []
+  "NATIVE: Test a basic defmulti"
+  (defmulti fun
+    ([] "Hello!")
+    ([a] a)
+    ([a b] "a b")
+    ([a b c] "a b c"))
+
+  (assert (= (fun) "Hello!"))
+  (assert (= (fun "a") "a"))
+  (assert (= (fun "a" "b") "a b"))
+  (assert (= (fun "a" "b" "c") "a b c")))
+
+
+(defn test-kw-args []
+  "NATIVE: Test if kwargs are handled correctly"
+  (defmulti fun
+    ([a] a)
+    ([&optional [a "nop"] [b "p"]] (+ a b)))
+   
+  (assert (= (fun 1) 1))
+  (assert (= (apply fun [] {"a" "t"}) "t"))
+  (assert (= (apply fun ["hello "] {"b" "world"}) "hello world"))
+  (assert (= (apply fun [] {"a" "hello " "b" "world"}) "hello world")))
+
+
+(defn test-docs []
+  "NATIVE: Test if docs are properly handled"
+  (defmulti fun
+    "docs"
+    ([a] (print a))
+    ([a b] (print b)))
+  
+  (assert (= fun.--doc-- "docs")))
+(import [hy.contrib.walk [*]])
+
+(def walk-form '(print {"foo" "bar"
+                        "array" [1 2 3 [4]]
+                        "something" (+ 1 2 3 4)
+                        "cons!" (cons 1 2)
+                        "quoted?" '(foo)}))
+
+(defn collector [acc x]
+  (.append acc x)
+  nil)
+
+(defn test-walk-identity []
+  (assert (= (walk identity identity walk-form)
+             walk-form)))
+
+(defn test-walk []
+  (let [[acc '()]]
+    (assert (= (walk (partial collector acc) identity walk-form)
+               [nil nil]))
+    (assert (= acc walk-form)))
+  (let [[acc []]]
+    (assert (= (walk identity (partial collector acc) walk-form)
+               nil))
+    (assert (= acc [walk-form]))))
+
+(defn test-macroexpand-all []
+  (assert (= (macroexpand-all '(with [a b c] (for [d c] foo)))
+             '(with* [a] (with* [b] (with* [c] (do (for* [d c] foo))))))))
+;; Copyright (c) 2013 Paul Tagliamonte <paultag@debian.org>
+;; Copyright (c) 2013 Bob Tolbert <bob@tolbert.org>
+
+;; Permission is hereby granted, free of charge, to any person obtaining a
+;; copy of this software and associated documentation files (the "Software"),
+;; to deal in the Software without restriction, including without limitation
+;; the rights to use, copy, modify, merge, publish, distribute, sublicense,
+;; and/or sell copies of the Software, and to permit persons to whom the
+;; Software is furnished to do so, subject to the following conditions:
+
+;; The above copyright notice and this permission notice shall be included in
+;; all copies or substantial portions of the Software.
+
+;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+;; IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+;; FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+;; THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+;; LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+;; FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+;; DEALINGS IN THE SOFTWARE.
+
+;;;; some simple helpers
+
+(defn assert-true [x]
+  (assert (= True x)))
+
+(defn assert-false [x]
+  (assert (= False x)))
+
+(defn assert-equal [x y]
+  (assert (= x y)))
+
+(defn assert-nil [x]
+  (assert (is x nil)))
+
+(defn test-coll? []
+  "NATIVE: testing coll?"
+  (assert-true (coll? [1 2 3]))
+  (assert-true (coll? {"a" 1 "b" 2}))
+  (assert-true (coll? (range 10)))
+  (assert-false (coll? "abc"))
+  (assert-false (coll? 1)))
+
+(defn test-cycle []
+  "NATIVE: testing cycle"
+  (assert-equal (list (cycle [])) [])
+  (assert-equal (list (take 7 (cycle [1 2 3]))) [1 2 3 1 2 3 1])
+  (assert-equal (list (take 2 (cycle [1 2 3]))) [1 2])
+  (assert-equal (list (take 4 (cycle [1 None 3]))) [1 None 3 1]))
+
+(defn test-dec []
+  "NATIVE: testing the dec function"
+  (assert-equal 0 (dec 1))
+  (assert-equal -1 (dec 0))
+  (assert-equal 0 (dec (dec 2)))
+  (try (do (dec "foo") (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (dec []) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (dec None) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e))))))
+
+(defn test-setv []
+  "NATIVE: testing setv mutation"
+  (setv x 1)
+  (setv y 1)
+  (assert-equal x y)
+  (setv x (setv y  12))
+  (assert-equal x 12)
+  (assert-equal y 12)
+  (setv x (setv y (fn [x] 9)))
+  (assert-equal (x y) 9)
+  (assert-equal (y x) 9)
+  (try (do (setv a.b 1) (assert False))
+       (catch [e [NameError]] (assert (in "name 'a' is not defined" (str e)))))
+  (try (do (setv b.a (fn [x] x)) (assert False))
+       (catch [e [NameError]] (assert (in "name 'b' is not defined" (str e)))))
+  (import itertools)
+  (setv foopermutations (fn [x] (itertools.permutations x)))
+  (setv p (set [(, 1 3 2) (, 3 2 1) (, 2 1 3) (, 3 1 2) (, 1 2 3) (, 2 3 1)]))
+  (assert-equal (set (itertools.permutations [1 2 3])) p)
+  (assert-equal (set (foopermutations [3 1 2])) p)
+  (setv permutations- itertools.permutations)
+  (setv itertools.permutations (fn [x] 9))
+  (assert-equal (itertools.permutations p) 9)
+  (assert-equal (foopermutations foopermutations) 9)
+  (setv itertools.permutations permutations-)
+  (assert-equal (set (itertools.permutations [2 1 3])) p)
+  (assert-equal (set (foopermutations [2 3 1])) p))
+
+(defn test-distinct []
+  "NATIVE: testing the distinct function"
+  (setv res (list (distinct [ 1 2 3 4 3 5 2 ])))
+  (assert-equal res [1 2 3 4 5])
+  ;; distinct of an empty list should be []
+  (setv res (list (distinct [])))
+  (assert-equal res [])
+  ;; now with an iter
+  (setv test_iter (iter [1 2 3 4 3 5 2]))
+  (setv res (list (distinct test_iter)))
+  (assert-equal res [1 2 3 4 5])
+  ; make sure we can handle None in the list
+  (setv res (list (distinct [1 2 3 2 5 None 3 4 None])))
+  (assert-equal res [1 2 3 5 None 4]))
+
+(defn test-drop []
+  "NATIVE: testing drop function"
+  (setv res (list (drop 2 [1 2 3 4 5])))
+  (assert-equal res [3 4 5])
+  (setv res (list (drop 3 (iter [1 2 3 4 5]))))
+  (assert-equal res [4 5])
+  (setv res (list (drop 3 (iter [1 2 3 None 4 5]))))
+  (assert-equal res [None 4 5])
+  (setv res (list (drop 0 [1 2 3 4 5])))
+  (assert-equal res [1 2 3 4 5])
+  (try (do (list (drop -1 [1 2 3 4 5])) (assert False))
+       (catch [e [ValueError]] nil))
+  (setv res (list (drop 6 (iter [1 2 3 4 5]))))
+  (assert-equal res [])
+  (setv res (list (take 5 (drop 2 (iterate inc 0)))))
+  (assert-equal res [2 3 4 5 6]))
+
+(defn test-drop-while []
+  "NATIVE: testing drop-while function"
+  (setv res (list (drop-while even? [2 4 7 8 9])))
+  (assert (= res [7 8 9]))
+  (setv res (list (drop-while pos? [2 4 7 8 9])))
+  (assert (= res []))
+  (setv res (list (drop-while numeric? [1 2 3 None "a"])))
+  (assert (= res [None "a"])))
+
+(defn test-empty? []
+  "NATIVE: testing the empty? function"
+  (assert-true (empty? ""))
+  (assert-false (empty? "None"))
+  (assert-true (empty? (,)))
+  (assert-false (empty? (, None)))
+  (assert-true (empty? []))
+  (assert-false (empty? [None]))
+  (assert-true (empty? {}))
+  (assert-false (empty? {"a" None}))
+  (assert-true (empty? (set)))
+  (assert-false (empty? (set [None]))))
+
+(defn test-even []
+  "NATIVE: testing the even? function"
+  (assert-true (even? -2))
+  (assert-false (even? 1))
+  (assert-true (even? 0))
+  (try (even? "foo")
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (even? [])
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (even? None)
+       (catch [e [TypeError]] (assert (in "not a number" (str e))))))
+
+(defn test-every? []
+  "NATIVE: testing the every? function"
+  (assert-true (every? even? [2 4 6]))
+  (assert-false (every? even? [1 3 5]))
+  (assert-false (every? even? [2 4 5]))
+  (assert-true (every? even? [])))
+
+(defn test-filter []
+  "NATIVE: testing the filter function"
+  (setv res (list (filter pos? [ 1 2 3 -4 5])))
+  (assert-equal res [ 1 2 3 5 ])
+  ;; test with iter
+  (setv res (list (filter pos? (iter [ 1 2 3 -4 5 -6]))))
+  (assert-equal res [ 1 2 3 5])
+  (setv res (list (filter neg? [ -1 -4 5 3 4])))
+  (assert-false (= res [1 2]))
+  ;; test with empty list
+  (setv res (list (filter neg? [])))
+  (assert-equal res [])
+  ;; test with None in the list
+  (setv res (list (filter even? (filter numeric? [1 2 None 3 4 None 4 6]))))
+  (assert-equal res [2 4 4 6])
+  (setv res (list (filter none? [1 2 None 3 4 None 4 6])))
+  (assert-equal res [None None]))
+
+(defn test-flatten []
+  "NATIVE: testing the flatten function"
+  (setv res (flatten [1 2 [3 4] 5]))
+  (assert-equal res [1 2 3 4 5])
+  (setv res (flatten ["foo" (, 1 2) [1 [2 3] 4] "bar"]))
+  (assert-equal res ["foo" 1 2 1 2 3 4 "bar"])
+  (setv res (flatten [1]))
+  (assert-equal res [1])
+  (setv res (flatten []))
+  (assert-equal res [])
+  (setv res (flatten (, 1)))
+  (assert-equal res [1])
+  ;; test with None
+  (setv res (flatten (, 1 (, None 3))))
+  (assert-equal res [1 None 3])
+  (try (flatten "foo")
+       (catch [e [TypeError]] (assert (in "not a collection" (str e)))))
+  (try (flatten 12.34)
+       (catch [e [TypeError]] (assert (in "not a collection" (str e))))))
+
+(defn test-float? []
+  "NATIVE: testing the float? function"
+  (assert-true (float? 4.2))
+  (assert-false (float? 0))
+  (assert-false (float? -3))
+  (assert-true (float? -3.2))
+  (assert-false (float? "foo")))
+
+(defn test-gensym []
+  "NATIVE: testing the gensym function"
+  (import [hy.models.symbol [HySymbol]])
+  (setv s1 (gensym))
+  (assert (isinstance s1 HySymbol))
+  (assert (= 0 (.find s1 ":G_")))
+  (setv s2 (gensym "xx"))
+  (setv s3 (gensym "xx"))
+  (assert (= 0 (.find s2 ":xx_")))
+  (assert (not (= s2 s3)))
+  (assert (not (= (str s2) (str s3)))))
+
+(defn test-identity []
+  "NATIVE: testing the identity function"
+  (assert (= 4 (identity 4)))
+  (assert (= "hy" (identity "hy")))
+  (assert (= [1 2] (identity [1 2]))))
+
+(defn test-inc []
+  "NATIVE: testing the inc function"
+  (assert-equal 3 (inc 2))
+  (assert-equal 0 (inc -1))
+  (try (do (inc "foo") (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (inc []) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (inc None) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e))))))
+
+(defn test-instance []
+  "NATIVE: testing instance? function"
+  (defclass Foo [object])
+  (defclass Foo2 [object])
+  (defclass Foo3 [Foo])
+  (setv foo (Foo))
+  (setv foo3 (Foo3))
+  (assert-true (instance? Foo foo))
+  (assert-false (instance? Foo2 foo))
+  (assert-true (instance? Foo foo3))
+  (assert-true (instance? float 1.0))
+  (assert-true (instance? int (int  3)))
+  (assert-true (instance? str (str "hello"))))
+
+(defn test-integer? []
+  "NATIVE: testing the integer? function"
+  (assert-true (integer? 0))
+  (assert-true (integer? 3))
+  (assert-true (integer? -3))
+  (assert-true (integer? (integer "-3")))
+  (assert-true (integer? (integer 3)))
+  (assert-false (integer? 4.2))
+  (assert-false (integer? None))
+  (assert-false (integer? "foo")))
+
+(defn test-integer-char? []
+  "NATIVE: testing the integer-char? function"
+  (assert-true (integer-char? "1"))
+  (assert-true (integer-char? "-1"))
+  (assert-true (integer-char? (str (integer 300))))
+  (assert-false (integer-char? "foo"))
+  (assert-false (integer-char? None)))
+
+(defn test-interleave []
+  "NATIVE: testing the interleave function"
+  ;; with more than 2 sequences
+  (assert-equal (list (take 9 (interleave (range 10)
+                                          (range 10 20)
+                                          (range 20 30))))
+                [0 10 20 1 11 21 2 12 22])
+  ;; with sequences of different length
+  (assert-equal (list (interleave (range 1000000)
+                                  (range 0 -3 -1)))
+                [0 0 1 -1 2 -2])
+  ;; with infinite sequences
+  (import itertools)
+  (assert-equal (list (take 10 (interleave (itertools.count)
+                                           (itertools.count 100))))
+                [0 100 1 101 2 102 3 103 4 104]))
+
+(defn test-interpose []
+  "NATIVE: testing the interpose function"
+  ;; with a list
+  (assert-equal (list (interpose "!" ["a" "b" "c"]))
+                ["a" "!" "b" "!" "c"])
+  ;; with an infinite sequence
+  (import itertools)
+  (assert-equal (list (take 7 (interpose -1 (itertools.count))))
+                [0 -1 1 -1 2 -1 3]))
+
+(defn test-iterable []
+  "NATIVE: testing iterable? function"
+  ;; should work for a string
+  (setv s (str "abcde"))
+  (assert-true (iterable? s))
+  ;; should work for unicode
+  (setv u "hello")
+  (assert-true (iterable? u))
+  (assert-true (iterable? (iter u)))
+  ;; should work for a list
+  (setv l [1 2 3 4])
+  (assert-true (iterable? l))
+  (assert-true (iterable? (iter l)))
+  ;; should work for a dict
+  (setv d {:a 1 :b 2 :c 3})
+  (assert-true (iterable? d))
+  ;; should work for a tuple?
+  (setv t (, 1 2 3 4))
+  (assert-true (iterable? t))
+  ;; should work for a generator
+  (assert-true (iterable? (repeat 3)))
+  ;; shouldn't work for an int
+  (assert-false (iterable? 5)))
+
+(defn test-iterate []
+  "NATIVE: testing the iterate function"
+  (setv res (list (take 5 (iterate inc 5))))
+  (assert-equal res [5 6 7 8 9])
+  (setv res (list (take 3 (iterate (fn [x] (* x x)) 5))))
+  (assert-equal res [5 25 625])
+  (setv f (take 4 (iterate inc 5)))
+  (assert-equal (list f) [5 6 7 8]))
+
+(defn test-iterator []
+  "NATIVE: testing iterator? function"
+  ;; should not work for a list
+  (setv l [1 2 3 4])
+  (assert-false (iterator? l))
+  ;; should work for an iter over a list
+  (setv i (iter [1 2 3 4]))
+  (assert-true (iterator? i))
+  ;; should not work for a dict
+  (setv d {:a 1 :b 2 :c 3})
+  (assert-false (iterator? d))
+  ;; should not work for a tuple?
+  (setv t (, 1 2 3 4))
+  (assert-false (iterator? t))
+  ;; should work for a generator
+  (assert-true (iterator? (repeat 3)))
+  ;; should not work for an int
+  (assert-false (iterator? 5)))
+
+(defn test-neg []
+  "NATIVE: testing the neg? function"
+  (assert-true (neg? -2))
+  (assert-false (neg? 1))
+  (assert-false (neg? 0))
+  (try (do (neg? "foo") (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (neg? []) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (neg? None) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e))))))
+
+(defn test-zero []
+  "NATIVE: testing the zero? function"
+  (assert-false (zero? -2))
+  (assert-false (zero? 1))
+  (assert-true (zero? 0))
+  (try (do (zero? "foo") (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (zero? []) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (zero? None) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e))))))
+
+(defn test-none []
+  "NATIVE: testing for `is None`"
+  (assert-true (none? None))
+  (setv f None)
+  (assert-true (none? f))
+  (assert-false (none? 0))
+  (assert-false (none? "")))
+
+(defn test-nil? []
+  "NATIVE: testing for `is nil`"
+  (assert-true (nil? nil))
+  (assert-true (nil? None))
+  (setv f nil)
+  (assert-true (nil? f))
+  (assert-false (nil? 0))
+  (assert-false (nil? "")))
+
+(defn test-nth []
+  "NATIVE: testing the nth function"
+  (assert-equal 2 (nth [1 2 4 7] 1))
+  (assert-equal 7 (nth [1 2 4 7] 3))
+  (assert-nil (nth [1 2 4 7] 5))
+  (assert-equal (nth [1 2 4 7] 5 "some default value")
+                "some default value")  ; with default specified
+  (try (do (nth [1 2 4 7] -1) (assert False))
+       (catch [e [ValueError]] nil))
+  ;; now for iterators
+  (assert-equal 2 (nth (iter [1 2 4 7]) 1))
+  (assert-equal 7 (nth (iter [1 2 4 7]) 3))
+  (assert-nil (nth (iter [1 2 4 7]) 5))
+  (assert-equal (nth (iter [1 2 4 7]) 5 "some default value")
+                "some default value")  ; with default specified
+  (try (do (nth (iter [1 2 4 7]) -1) (assert False))
+       (catch [e [ValueError]] nil))
+  (assert-equal 5 (nth (take 3 (drop 2 [1 2 3 4 5 6])) 2)))
+
+(defn test-numeric? []
+  "NATIVE: testing the numeric? function"
+  (assert-true (numeric? 1))
+  (assert-true (numeric? 3.4))
+  (assert-true (numeric? 0.0))
+  (assert-true (numeric? -1.45))
+  (assert-false (numeric? "Foo"))
+  (assert-false (numeric? None)))
+
+(defn test-odd []
+  "NATIVE: testing the odd? function"
+  (assert-true (odd? -3))
+  (assert-true (odd? 1))
+  (assert-false (odd? 0))
+  (try (do (odd? "foo") (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (odd? []) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (odd? None) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e))))))
+
+(defn test-pos []
+  "NATIVE: testing the pos? function"
+  (assert-true (pos? 2))
+  (assert-false (pos? -1))
+  (assert-false (pos? 0))
+  (try (do (pos? "foo") (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (pos? []) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e)))))
+  (try (do (pos? None) (assert False))
+       (catch [e [TypeError]] (assert (in "not a number" (str e))))))
+
+(defn test-remove []
+  "NATIVE: testing the remove function"
+  (setv r (list (remove odd? [1 2 3 4 5 6 7])))
+  (assert-equal r [2 4 6])
+  (assert-equal (list (remove even? [1 2 3 4 5])) [1 3 5])
+  (assert-equal (list (remove neg? [1 2 3 4 5])) [1 2 3 4 5])
+  (assert-equal (list (remove pos? [1 2 3 4 5])) [])
+  ;; deal with embedded None
+  (assert-equal (list (remove (fn [x] (not (numeric? x))) [1 2 None 3 None 4])) [1 2 3 4]))
+
+(defn test-repeat []
+  "NATIVE: testing repeat"
+  (setv r (repeat 10))
+  (assert-equal (list (take 5 r)) [10 10 10 10 10])
+  (assert-equal (list (take 4 r)) [10 10 10 10])
+  (setv r (repeat 10 3))
+  (assert-equal (list r) [10 10 10]))
+
+(defn test-repeatedly []
+  "NATIVE: testing repeatedly"
+  (setv r (repeatedly (fn [] (inc 4))))
+  (assert-equal (list (take 5 r)) [5 5 5 5 5])
+  (assert-equal (list (take 4 r)) [5 5 5 5])
+  (assert-equal (list (take 6 r)) [5 5 5 5 5 5]))
+
+(defn test-second []
+  "NATIVE: testing second"
+  (assert-equal 2 (second [1 2]))
+  (assert-equal 3 (second [2 3 4])))
+
+(defn test-some []
+  "NATIVE: testing the some function"
+  (assert-true (some even? [2 4 6]))
+  (assert-nil (some even? [1 3 5]))
+  (assert-true (some even? [1 2 3]))
+  (assert-nil (some even? []))
+  ; 0, "" (empty string) and [] (empty list) are all logical false
+  (assert-nil (some identity [0 "" []]))
+  ; non-empty string is logical true
+  (assert-equal (some identity [0 "this string is non-empty" []])
+                "this string is non-empty")
+  ; nil if collection is empty
+  (assert-nil (some even? [])))
+
+(defn test-string? []
+  "NATIVE: testing string?"
+  (assert-true (string? "foo"))
+  (assert-true (string? ""))
+  (assert-false (string? 5.3))
+  (assert-true (string? (str 5.3)))
+  (assert-false (string? None)))
+
+(defn test-take []
+  "NATIVE: testing the take function"
+  (setv res (list (take 3 [1 2 3 4 5])))
+  (assert-equal res [1 2 3])
+  (setv res (list (take 4 (repeat "s"))))
+  (assert-equal res ["s" "s" "s" "s"])
+  (setv res (list (take 0 (repeat "s"))))
+  (assert-equal res [])
+  (try (do (list (take -1 (repeat "s"))) (assert False))
+       (catch [e [ValueError]] nil))
+  (setv res (list (take 6 [1 2 None 4])))
+  (assert-equal res [1 2 None 4]))
+
+(defn test-take-nth []
+  "NATIVE: testing the take-nth function"
+  (setv res (list (take-nth 2 [1 2 3 4 5 6 7])))
+  (assert-equal res [1 3 5 7])
+  (setv res (list (take-nth 3 [1 2 3 4 5 6 7])))
+  (assert-equal res [1 4 7])
+  (setv res (list (take-nth 4 [1 2 3 4 5 6 7])))
+  (assert-equal res [1 5])
+  (setv res (list (take-nth 5 [1 2 3 4 5 6 7])))
+  (assert-equal res [1 6])
+  (setv res (list (take-nth 6 [1 2 3 4 5 6 7])))
+  (assert-equal res [1 7])
+  (setv res (list (take-nth 7 [1 2 3 4 5 6 7])))
+  (assert-equal res [1])
+  ;; what if there are None's in list
+  (setv res (list (take-nth 2 [1 2 3 None 5 6])))
+  (assert-equal res [1 3 5])
+  (setv res (list (take-nth 3 [1 2 3 None 5 6])))
+  (assert-equal res [1 None])
+  ;; using 0 should raise ValueError
+  (let [[passed false]]
+    (try
+     (setv res (list (take-nth 0 [1 2 3 4 5 6 7])))
+     (catch [ValueError] (setv passed true)))
+    (assert passed)))
+
+(defn test-take-while []
+  "NATIVE: testing the take-while function"
+  (setv res (list (take-while pos? [ 1 2 3 -4 5])))
+  (assert-equal res [1 2 3])
+  (setv res (list (take-while neg? [ -1 -4 5 3 4])))
+  (assert-false (= res [1 2]))
+  (setv res (list (take-while none? [None None 1 2 3])))
+  (assert-equal res [None None])
+  (setv res (list (take-while (fn [x] (not (none? x))) [1 2 3 4 None 5 6 None 7])))
+  (assert-equal res [1 2 3 4]))
+
+(defn test-zipwith []
+  "NATIVE: testing the zipwith function"
+  (import operator)
+  (setv res (zipwith operator.add [1 2 3] [3 2 1]))
+  (assert-equal (list res) [4 4 4])
+  (setv res (zipwith operator.sub [3 7 9] [1 2 4]))
+  (assert-equal (list res) [2 5 5]))
+
+(defn test-doto []
+  "NATIVE: testing doto macro"
+  (setv collection [])
+  (doto collection (.append 1) (.append 2) (.append 3))
+  (assert-equal collection [1 2 3])
+  (setv res (doto (set) (.add 2) (.add 1)))
+  (assert-equal res (set [1 2]))
+  (setv res (doto [] (.append 1) (.append 2) .reverse))
+  (assert-equal res [2 1]))
+
+(defn test-is-keyword []
+  "NATIVE: testing the keyword? function"
+  (assert (keyword? ':bar))
+  (assert (keyword? ':baz))
+  (assert (keyword? :bar))
+  (assert (keyword? :baz))
+  (assert (not (keyword? "foo")))
+  (assert (not (keyword? ":foo")))
+  (assert (not (keyword? 1)))
+  (assert (not (keyword? nil))))
+(defn test-defclass []
+  "NATIVE: test defclass simple mechanism"
+  (defclass A)
+  (assert (isinstance (A) A)))
+
+
+(defn test-defclass-inheritance []
+  "NATIVE: test defclass inheritance"
+  (defclass A [])
+  (assert (isinstance (A) object))
+  (defclass A [object])
+  (assert (isinstance (A) object))
+  (defclass B [A])
+  (assert (isinstance (B) A))
+  (defclass C [object])
+  (defclass D [B C])
+  (assert (isinstance (D) A))
+  (assert (isinstance (D) B))
+  (assert (isinstance (D) C))
+  (assert (not (isinstance (A) D))))
+
+
+(defn test-defclass-attrs []
+  "NATIVE: test defclass attributes"
+  (defclass A []
+    [[x 42]])
+  (assert (= A.x 42))
+  (assert (= (getattr (A) "x")  42)))
+
+
+(defn test-defclass-attrs-fn []
+  "NATIVE: test defclass attributes with fn"
+  (defclass B []
+    [[x 42]
+     [y (fn [self value]
+          (+ self.x value))]])
+  (assert (= B.x 42))
+  (assert (= (.y (B) 5) 47))
+  (let [[b (B)]]
+    (setv B.x 0)
+    (assert (= (.y b 1) 1))))
+
+
+(defn test-defclass-dynamic-inheritance []
+  "NATIVE: test defclass with dynamic inheritance"
+  (defclass A [((fn [] (if true list dict)))]
+    [[x 42]])
+  (assert (isinstance (A) list))
+  (defclass A [((fn [] (if false list dict)))]
+    [[x 42]])
+  (assert (isinstance (A) dict)))
+
+
+(defn test-defclass-no-fn-leak []
+  "NATIVE: test defclass attributes with fn"
+  (defclass A []
+    [[x (fn [] 1)]])
+  (try
+   (do
+    (x)
+    (assert false))
+   (except [NameError])))
+
+(defn test-defclass-docstring []
+  "NATIVE: test defclass docstring"
+  (defclass A []
+    [[--doc-- "doc string"]
+     [x 1]])
+  (setv a (A))
+  (assert (= a.__doc__ "doc string"))
+  (defclass B []
+    "doc string"
+    [[x 1]])
+  (setv b (B))
+  (assert (= b.x 1))
+  (assert (= b.__doc__ "doc string"))
+  (defclass MultiLine []
+    "begin a very long multi-line string to make
+     sure that it comes out the way we hope
+     and can span 3 lines end."
+    [[x 1]])
+  (setv mL (MultiLine))
+  (assert (= mL.x 1))
+  (assert (in "begin" mL.__doc__))
+  (assert (in "end" mL.__doc__)))
+(import [tests.resources [kwtest function-with-a-dash]]
+        [os.path [exists isdir isfile]]
+        [sys :as systest]
+        [operator [or_]])
+(import sys)
+
+(import [hy._compat [PY33 PY34]])
+
+(defn test-sys-argv []
+  "NATIVE: test sys.argv"
+  ;; BTW, this also tests inline comments. Which suck to implement.
+  (assert (isinstance sys.argv list)))
+
+
+(defn test-lists []
+  "NATIVE: test lists work right"
+  (assert (= [1 2 3 4] (+ [1 2] [3 4]))))
+
+
+(defn test-dicts []
+  "NATIVE: test dicts work right"
+  (assert (= {1 2 3 4} {3 4 1 2}))
+  (assert (= {1 2 3 4} {1 (+ 1 1) 3 (+ 2 2)})))
+
+
+(defn test-setv-get []
+  "NATIVE: test setv works on a get expression"
+  (setv foo [0 1 2])
+  (setv (get foo 0) 12)
+  (assert (= (get foo 0) 12)))
+
+(defn test-setv-builtin []
+  "NATIVE: test that setv doesn't work on builtins"
+  (try (eval '(setv False 1))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(setv True 0))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(setv None 1))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(setv false 1))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(setv true 0))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(setv nil 1))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(setv null 1))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(defn defclass [] (print "hello")))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(defn get [] (print "hello")))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e)))))
+  (try (eval '(defn lambda [] (print "hello")))
+       (catch [e [TypeError]] (assert (in "Can't assign to a builtin" (str e))))))
+
+(defn test-for-loop []
+  "NATIVE: test for loops"
+  (setv count 0)
+  (for [x [1 2 3 4 5]]
+    (setv count (+ count x)))
+  (assert (= count 15))
+  (setv count 0)
+  (for [x [1 2 3 4 5]
+        y [1 2 3 4 5]]
+    (setv count (+ count x y)))
+  (assert (= count 150))
+  (assert (= (list ((fn [] (for [x [[1] [2 3]] y x] (yield y)))))
+             (list-comp y [x [[1] [2 3]] y x])))
+  (assert (= (list ((fn [] (for [x [[1] [2 3]] y x z (range 5)] (yield z)))))
+             (list-comp z [x [[1] [2 3]] y x z (range 5)]))))
+
+
+(defn test-nasty-for-nesting []
+  "NATIVE: test nesting for loops harder"
+  ;; This test and feature is dedicated to @nedbat.
+
+  ;; let's ensure empty iterating is an implicit do
+  (setv t 0)
+  (for [] (setv t 1))
+  (assert (= t 1))
+
+  ;; OK. This first test will ensure that the else is hooked up to the
+  ;; for when we break out of it.
+  (for [x (range 2)
+        y (range 2)]
+      (break)
+    (else (throw Exception)))
+
+  ;; OK. This next test will ensure that the else is hooked up to the
+  ;; "inner" iteration
+  (for [x (range 2)
+        y (range 2)]
+    (if (= y 1) (break))
+    (else (throw Exception)))
+
+  ;; OK. This next test will ensure that the else is hooked up to the
+  ;; "outer" iteration
+  (for [x (range 2)
+        y (range 2)]
+    (if (= x 1) (break))
+    (else (throw Exception)))
+
+  ;; OK. This next test will ensure that we call the else branch exactly
+  ;; once.
+  (setv flag 0)
+  (for [x (range 2)
+        y (range 2)]
+    (+ 1 1)
+    (else (setv flag (+ flag 2))))
+  (assert (= flag 2)))
+
+
+(defn test-while-loop []
+  "NATIVE: test while loops?"
+  (setv count 5)
+  (setv fact 1)
+  (while (> count 0)
+    (setv fact (* fact count))
+    (setv count (- count 1)))
+  (assert (= count 0))
+  (assert (= fact 120)))
+
+
+(defn test-not []
+  "NATIVE: test not"
+  (assert (not (= 1 2)))
+  (assert (= true (not false)))
+  (assert (= false (not 42))) )
+
+
+(defn test-inv []
+  "NATIVE: test inv"
+  (assert (= (~ 1) -2))
+  (assert (= (~ -2) 1)))
+
+
+(defn test-in []
+  "NATIVE: test in"
+  (assert (in "a" ["a" "b" "c" "d"]))
+  (assert (not-in "f" ["a" "b" "c" "d"])))
+
+
+(defn test-noteq []
+  "NATIVE: not eq"
+  (assert (!= 2 3)))
+
+
+(defn test-numops []
+  "NATIVE: test numpos"
+  (assert (> 5 4 3 2 1))
+  (assert (< 1 2 3 4 5))
+  (assert (<= 5 5 5 5 ))
+  (assert (>= 5 5 5 5 )))
+
+
+(defn test-is []
+  "NATIVE: test is can deal with None"
+  (setv a nil)
+  (assert (is a nil))
+  (assert (is-not a "b"))
+  (assert (none? a)))
+
+
+(defn test-branching []
+  "NATIVE: test if branching"
+  (if true
+    (assert (= 1 1))
+    (assert (= 2 1))))
+
+
+(defn test-branching-with-do []
+  "NATIVE: test if branching (multiline)"
+  (if false
+    (assert (= 2 1))
+    (do
+     (assert (= 1 1))
+     (assert (= 1 1))
+     (assert (= 1 1)))))
+
+(defn test-branching-expr-count-with-do []
+  "NATIVE: make sure we execute the right number of expressions in the branch"
+  (setv counter 0)
+  (if false
+    (assert (= 2 1))
+    (do
+     (setv counter (+ counter 1))
+     (setv counter (+ counter 1))
+     (setv counter (+ counter 1))))
+  (assert (= counter 3)))
+
+
+(defn test-cond []
+  "NATIVE: test if cond sorta works."
+  (cond
+   [(= 1 2) (assert (is true false))]
+   [(is null null) (assert (is true true))]))
+
+
+(defn test-index []
+  "NATIVE: Test that dict access works"
+  (assert (= (get {"one" "two"} "one") "two"))
+  (assert (= (get [1 2 3 4 5] 1) 2))
+  (assert (= (get {"first" {"second" {"third" "level"}}}
+                  "first" "second" "third")
+             "level"))
+  (assert (= (get ((fn [] {"first" {"second" {"third" "level"}}}))
+                  "first" "second" "third")
+             "level"))
+  (assert (= (get {"first" {"second" {"third" "level"}}}
+                  ((fn [] "first")) "second" "third")
+             "level")))
+
+
+(defn test-lambda []
+  "NATIVE: test lambda operator"
+  (setv square (lambda [x] (* x x)))
+  (assert (= 4 (square 2)))
+  (setv lambda_list (lambda [test &rest args] (, test args)))
+  (assert (= (, 1 (, 2 3)) (lambda_list 1 2 3))))
+
+
+(defn test-imported-bits []
+  "NATIVE: test the imports work"
+  (assert (is (exists ".") true))
+  (assert (is (isdir ".") true))
+  (assert (is (isfile ".") false)))
+
+
+(defn test-kwargs []
+  "NATIVE: test kwargs things."
+  (assert (= (apply kwtest [] {"one" "two"}) {"one" "two"}))
+  (setv mydict {"one" "three"})
+  (assert (= (apply kwtest [] mydict) mydict))
+  (assert (= (apply kwtest [] ((fn [] {"one" "two"}))) {"one" "two"})))
+
+
+(defn test-apply []
+  "NATIVE: test working with args and functions"
+  (defn sumit [a b c] (+ a b c))
+  (assert (= (apply sumit [1] {"b" 2 "c" 3}) 6))
+  (assert (= (apply sumit [1 2 2]) 5))
+  (assert (= (apply sumit [] {"a" 1 "b" 1 "c" 2}) 4))
+  (assert (= (apply sumit ((fn [] [1 1])) {"c" 1}) 3))
+  (defn noargs [] [1 2 3])
+  (assert (= (apply noargs) [1 2 3])))
+
+
+(defn test-apply-with-methods []
+  "NATIVE: test apply to call a method"
+  (setv str "foo {bar}")
+  (assert (= (apply .format [str] {"bar" "baz"})
+             (apply .format ["foo {0}" "baz"])
+             "foo baz"))
+  (setv lst ["a {0} {1} {foo} {bar}" "b" "c"])
+  (assert (= (apply .format lst {"foo" "d" "bar" "e"})
+             "a b c d e")))
+
+
+(defn test-dotted []
+  "NATIVE: test dotted invocation"
+  (assert (= (.join " " ["one" "two"]) "one two")))
+
+
+(defn test-do []
+  "NATIVE: test do"
+  (do))
+
+(defn test-bare-try [] (try
+    (try (raise ValueError))
+  (except [ValueError])
+  (else (assert false))))
+
+
+(defn test-exceptions []
+  "NATIVE: test Exceptions"
+
+  (try)
+
+  (try (do))
+
+  (try (do))
+
+  (try (do) (except))
+
+  (try (do) (except [IOError]) (except))
+
+  ;; Test correct (raise)
+  (let [[passed false]]
+    (try
+     (try
+      (raise IndexError)
+      (except [IndexError] (raise)))
+     (except [IndexError]
+       (setv passed true)))
+    (assert passed))
+
+  ;; Test incorrect (raise)
+  (let [[passed false]]
+    (try
+     (raise)
+     ;; Python 2 raises TypeError
+     ;; Python 3 raises RuntimeError
+     (except [[TypeError RuntimeError]]
+       (setv passed true)))
+    (assert passed))
+
+
+  ;; Test (finally)
+  (let [[passed false]]
+    (try
+     (do)
+     (finally (setv passed true)))
+    (assert passed))
+
+  ;; Test (finally) + (raise)
+  (let [[passed false]]
+    (try
+     (raise Exception)
+     (except)
+     (finally (setv passed true)))
+    (assert passed))
+
+
+  ;; Test (finally) + (raise) + (else)
+  (let [[passed false]
+        [not-elsed true]]
+    (try
+     (raise Exception)
+     (except)
+     (else (setv not-elsed false))
+     (finally (setv passed true)))
+    (assert passed)
+    (assert not-elsed))
+
+  (try
+   (raise (KeyError))
+   (catch [[IOError]] (assert false))
+   (catch [e [KeyError]] (assert e)))
+
+  (try
+   (throw (KeyError))
+   (except [[IOError]] (assert false))
+   (catch [e [KeyError]] (assert e)))
+
+  (try
+   (get [1] 3)
+   (catch [IndexError] (assert true))
+   (except [IndexError] (do)))
+
+  (try
+   (print foobar42ofthebaz)
+   (catch [IndexError] (assert false))
+   (except [NameError] (do)))
+
+  (try
+   (get [1] 3)
+   (except [e IndexError] (assert (isinstance e IndexError))))
+
+  (try
+   (get [1] 3)
+   (catch [e [IndexError NameError]] (assert (isinstance e IndexError))))
+
+  (try
+   (print foobar42ofthebaz)
+   (except [e [IndexError NameError]] (assert (isinstance e NameError))))
+
+  (try
+   (print foobar42)
+   (catch [[IndexError NameError]] (do)))
+
+  (try
+   (get [1] 3)
+   (catch [[IndexError NameError]] (do)))
+
+  (try
+   (print foobar42ofthebaz)
+   (catch))
+
+  (try
+   (print foobar42ofthebaz)
+   (except []))
+
+  (try
+   (print foobar42ofthebaz)
+   (except [] (do)))
+
+  (try
+   (print foobar42ofthebaz)
+   (catch []
+     (setv foobar42ofthebaz 42)
+     (assert (= foobar42ofthebaz 42))))
+
+  (let [[passed false]]
+    (try
+     (try (do) (except) (else (bla)))
+     (except [NameError] (setv passed true)))
+    (assert passed))
+
+  (let [[x 0]]
+    (try
+     (raise IOError)
+     (except [IOError]
+       (setv x 45))
+     (else (setv x 44)))
+    (assert (= x 45)))
+
+  (let [[x 0]]
+    (try
+     (raise KeyError)
+     (except []
+       (setv x 45))
+     (else (setv x 44)))
+    (assert (= x 45)))
+
+  (let [[x 0]]
+    (try
+     (try
+      (raise KeyError)
+      (except [IOError]
+        (setv x 45))
+      (else (setv x 44)))
+     (except))
+    (assert (= x 0))))
+
+(defn test-earmuffs []
+  "NATIVE: Test earmuffs"
+  (setv *foo* "2")
+  (setv foo "3")
+  (assert (= *foo* FOO))
+  (assert (!= *foo* foo)))
+
+
+(defn test-threading []
+  "NATIVE: test threading macro"
+  (assert (= (-> (.upper "a b c d") (.replace "A" "X") (.split))
+             ["X" "B" "C" "D"])))
+
+
+(defn test-tail-threading []
+  "NATIVE: test tail threading macro"
+  (assert (= (.join ", " (* 10 ["foo"]))
+             (->> ["foo"] (* 10) (.join ", ")))))
+
+
+(defn test-threading-two []
+  "NATIVE: test threading macro"
+  (assert (= (-> "a b c d" .upper (.replace "A" "X") .split)
+             ["X" "B" "C" "D"])))
+
+
+(defn test-assoc []
+  "NATIVE: test assoc"
+  (setv vals {"one" "two"})
+  (assoc vals "two" "three")
+  (assert (= (get vals "two") "three")))
+
+(defn test-multiassoc []
+  "NATIVE: test assoc multiple values"
+  (setv vals {"one" "two"})
+  (assoc vals "two" "three" "four" "five")
+  (assert (and (= (get vals "two") "three") (= (get vals "four") "five") (= (get vals "one") "two"))))
+
+(defn test-pass []
+  "NATIVE: Test pass worksish"
+  (if true (do) (do))
+  (assert (= 1 1)))
+
+
+(defn test-yield []
+  "NATIVE: test yielding"
+  (defn gen [] (for [x [1 2 3 4]] (yield x)))
+  (setv ret 0)
+  (for [y (gen)] (setv ret (+ ret y)))
+  (assert (= ret 10)))
+
+(defn test-yield-with-return []
+  "NATIVE: test yield with return"
+  (defn gen [] (yield 3) "goodbye")
+  (if PY33
+    (do (setv gg (gen))
+        (assert (= 3 (next gg)))
+        (try (next gg)
+             (except [e StopIteration] (assert (hasattr e "value"))
+                                       (assert (= (getattr e "value") "goodbye")))))
+    (do (setv gg (gen))
+        (assert (= 3 (next gg)))
+        (try (next gg)
+             (except [e StopIteration] (assert (not (hasattr e "value"))))))))
+
+
+(defn test-yield-in-try []
+  "NATIVE: test yield in try"
+  (defn gen []
+    (let [[x 1]]
+    (try (yield x)
+         (finally (print x)))))
+  (setv output (list (gen)))
+  (assert (= [1] output)))
+
+
+(defn test-first []
+  "NATIVE: test firsty things"
+  (assert (= (first [1 2 3 4 5]) 1))
+  (assert (is (first []) nil))
+  (assert (= (car [1 2 3 4 5]) 1)))
+
+
+(defn test-slice []
+  "NATIVE: test slice"
+  (assert (= (slice [1 2 3 4 5] 1) [2 3 4 5]))
+  (assert (= (slice [1 2 3 4 5] 1 3) [2 3]))
+  (assert (= (slice [1 2 3 4 5]) [1 2 3 4 5])))
+
+
+(defn test-take []
+  "NATIVE: test take"
+  (assert (= (take 0 [2 3]) []))
+  (assert (= (take 1 [2 3]) [2]))
+  (assert (= (take 2 [2 3]) [2 3])))
+
+
+(defn test-drop []
+  "NATIVE: test drop"
+  (assert (= (list (drop 0 [2 3])) [2 3]))
+  (assert (= (list (drop 1 [2 3])) [3]))
+  (assert (= (list (drop 2 [2 3])) [])))
+
+
+(defn test-rest []
+  "NATIVE: test rest"
+  (assert (= (list (rest [1 2 3 4 5])) [2 3 4 5])))
+
+
+(defn test-importas []
+  "NATIVE: test import as"
+  (assert (!= (len systest.path) 0)))
+
+
+(defn test-context []
+  "NATIVE: test with"
+  (with [[fd (open "README.md" "r")]] (assert fd))
+  (with [[(open "README.md" "r")]] (do)))
+
+
+(defn test-with-return []
+  "NATIVE: test that with returns stuff"
+  (defn read-file [filename]
+    (with [[fd (open filename "r")]] (.read fd)))
+  (assert (!= 0 (len (read-file "README.md")))))
+
+
+(defn test-for-doodle []
+  "NATIVE: test for-do"
+  (do (do (do (do (do (do (do (do (do (setv (, x y) (, 0 0)))))))))))
+  (for [- [1 2]]
+    (do
+     (setv x (+ x 1))
+     (setv y (+ y 1))))
+  (assert (= y x 2)))
+
+
+(defn test-for-else []
+  "NATIVE: test for else"
+  (let [[x 0]]
+    (for* [a [1 2]]
+      (setv x (+ x a))
+      (else (setv x (+ x 50))))
+    (assert (= x 53)))
+
+  (let [[x 0]]
+    (for* [a [1 2]]
+      (setv x (+ x a))
+      (else))
+    (assert (= x 3))))
+
+
+(defn test-list-comprehensions []
+  "NATIVE: test list comprehensions"
+  (assert (= (list-comp (* x 2) (x (range 2))) [0 2]))
+  (assert (= (list-comp (* x 2) (x (range 4)) (% x 2)) [2 6]))
+  (assert (= (sorted (list-comp (* y 2) ((, x y) (.items {"1" 1 "2" 2}))))
+             [2 4]))
+  (assert (= (list-comp (, x y) (x (range 2) y (range 2)))
+             [(, 0 0) (, 0 1) (, 1 0) (, 1 1)]))
+  (assert (= (list-comp j (j [1 2])) [1 2])))
+
+
+(defn test-set-comprehensions []
+  "NATIVE: test set comprehensions"
+  (assert (instance? set (set-comp x [x (range 2)])))
+  (assert (= (set-comp (* x 2) (x (range 2))) (set [0 2])))
+  (assert (= (set-comp (* x 2) (x (range 4)) (% x 2)) (set [2 6])))
+  (assert (= (set-comp (* y 2) ((, x y) (.items {"1" 1 "2" 2})))
+             (set [2 4])))
+  (assert (= (set-comp (, x y) (x (range 2) y (range 2)))
+             (set [(, 0 0) (, 0 1) (, 1 0) (, 1 1)])))
+  (assert (= (set-comp j (j [1 2])) (set [1 2]))))
+
+
+(defn test-dict-comprehensions []
+  "NATIVE: test dict comprehensions"
+  (assert (instance? dict (dict-comp x x [x (range 2)])))
+  (assert (= (dict-comp x (* x 2) (x (range 2))) {1 2 0 0}))
+  (assert (= (dict-comp x (* x 2) (x (range 4)) (% x 2)) {3 6 1 2}))
+  (assert (= (dict-comp x (* y 2) ((, x y) (.items {"1" 1 "2" 2})))
+             {"2" 4 "1" 2}))
+  (assert (= (dict-comp (, x y) (+ x y) (x (range 2) y (range 2)))
+             {(, 0 0) 0 (, 1 0) 1 (, 0 1) 1 (, 1 1) 2})))
+
+
+(defn test-generator-expressions []
+  "NATIVE: test generator expressions"
+  (assert (not (instance? list (genexpr x [x (range 2)]))))
+  (assert (= (list (genexpr (* x 2) (x (range 2)))) [0 2]))
+  (assert (= (list (genexpr (* x 2) (x (range 4)) (% x 2))) [2 6]))
+  (assert (= (list (sorted (genexpr (* y 2) ((, x y) (.items {"1" 1 "2" 2})))))
+             [2 4]))
+  (assert (= (list (genexpr (, x y) (x (range 2) y (range 2))))
+             [(, 0 0) (, 0 1) (, 1 0) (, 1 1)]))
+  (assert (= (list (genexpr j (j [1 2]))) [1 2])))
+
+
+(defn test-defn-order []
+  "NATIVE: test defn evaluation order"
+  (setv acc [])
+  (defn my-fun []
+    (.append acc "Foo")
+    (.append acc "Bar")
+    (.append acc "Baz"))
+  (my-fun)
+  (assert (= acc ["Foo" "Bar" "Baz"])))
+
+
+(defn test-defn-return []
+  "NATIVE: test defn return"
+  (defn my-fun [x]
+    (+ x 1))
+  (assert (= 43 (my-fun 42))))
+
+
+(defn test-defn-do []
+  "NATIVE: test defn evaluation order with do"
+  (setv acc [])
+  (defn my-fun []
+    (do
+     (.append acc "Foo")
+     (.append acc "Bar")
+     (.append acc "Baz")))
+  (my-fun)
+  (assert (= acc ["Foo" "Bar" "Baz"])))
+
+
+(defn test-defn-do-return []
+  "NATIVE: test defn return with do"
+  (defn my-fun [x]
+    (do
+     (+ x 42)  ; noop
+     (+ x 1)))
+  (assert (= 43 (my-fun 42))))
+
+
+(defn test-mangles []
+  "NATIVE: test mangles"
+  (assert (= 2 ((fn [] (+ 1 1))))))
+
+
+(defn test-fn-return []
+  "NATIVE: test function return"
+  (setv fn-test ((fn [] (fn [] (+ 1 1)))))
+  (assert (= (fn-test) 2))
+  (setv fn-test (fn []))
+  (assert (= (fn-test) None)))
+
+
+(defn test-let []
+  "NATIVE: test let works rightish"
+  (assert (= (let [[x 1] [y 2] [z 3]] (+ x y z)) 6))
+  (assert (= (let [[x 1] a [y 2] b] (if a 1 2)) 2)))
+
+
+(defn test-if-mangler []
+  "NATIVE: test that we return ifs"
+  (assert (= true (if true true true))))
+
+
+(defn test-nested-mangles []
+  "NATIVE: test that we can use macros in mangled code"
+  (assert (= ((fn [] (-> 2 (+ 1 1) (* 1 2)))) 8)))
+
+
+(defn test-let-scope []
+  "NATIVE: test let works rightish"
+  (setv y 123)
+  (assert (= (let [[x 1]
+                   [y 2]
+                   [z 3]]
+               (+ x y z))
+             6))
+  (try
+   (assert (= x 42))                   ; This ain't true
+   (catch [e [NameError]] (assert e)))
+  (assert (= y 123)))
+
+
+(defn test-symbol-utf-8 []
+  "NATIVE: test symbol encoded"
+  (let [[♥ "love"]
+        [⚘ "flower"]]
+    (assert (= (+ ⚘ ♥) "flowerlove"))))
+
+
+(defn test-symbol-dash []
+  "NATIVE: test symbol encoded"
+  (let [[♥-♥ "doublelove"]
+        [-_- "what?"]]
+    (assert (= ♥-♥ "doublelove"))
+    (assert (= -_- "what?"))))
+
+
+(defn test-symbol-question-mark []
+  "NATIVE: test foo? -> is_foo behavior"
+  (let [[foo? "nachos"]]
+    (assert (= is_foo "nachos"))))
+
+
+(defn test-and []
+  "NATIVE: test the and function"
+  (let [[and123 (and 1 2 3)]
+        [and-false (and 1 False 3)]]
+    (assert (= and123 3))
+    (assert (= and-false False))))
+
+
+(defn test-or []
+  "NATIVE: test the or function"
+  (let [[or-all-true (or 1 2 3 True "string")]
+        [or-some-true (or False "hello")]
+        [or-none-true (or False False)]]
+    (assert (= or-all-true 1))
+    (assert (= or-some-true "hello"))
+    (assert (= or-none-true False))))
+
+
+(defn test-if-return-branching []
+  "NATIVE: test the if return branching"
+                                ; thanks, algernon
+  (assert (= 1 (let [[x 1]
+                     [y 2]]
+                 (if true
+                   2)
+                 1)))
+  (assert (= 1 (let [[x 1] [y 2]]
+                 (do)
+                 (do)
+                 ((fn [] 1))))))
+
+
+(defn test-keyword []
+  "NATIVE: test if keywords are recognised"
+
+  (assert (= :foo :foo))
+  (assert (= (get {:foo "bar"} :foo) "bar"))
+  (assert (= (get {:bar "quux"} (get {:foo :bar} :foo)) "quux")))
+
+(defn test-keyword-clash []
+  "NATIVE: test that keywords do not clash with normal strings"
+
+  (assert (= (get {:foo "bar" ":foo" "quux"} :foo) "bar"))
+  (assert (= (get {:foo "bar" ":foo" "quux"} ":foo") "quux")))
+
+(defn test-nested-if []
+  "NATIVE: test nested if"
+  (for [x (range 10)]
+    (if (in "foo" "foobar")
+      (do
+       (if true true true))
+      (do
+       (if false false false)))))
+
+
+(defn test-eval []
+  "NATIVE: test eval"
+  (assert (= 2 (eval (quote (+ 1 1)))))
+  (setv x 2)
+  (assert (= 4 (eval (quote (+ x 2)))))
+  (setv test-payload (quote (+ x 2)))
+  (setv x 4)
+  (assert (= 6 (eval test-payload)))
+  (assert (= 9 ((eval (quote (fn [x] (+ 3 3 x)))) 3)))
+  (assert (= 1 (eval (quote 1))))
+  (assert (= "foobar" (eval (quote "foobar"))))
+  (setv x (quote 42))
+  (assert (= x (eval x)))
+  (assert (= 27 (eval (+ (quote (*)) (* [(quote 3)] 3)))))
+  (assert (= None (eval (quote (print ""))))))
+
+
+(defn test-import-syntax []
+  "NATIVE: test the import syntax."
+
+  ;; Simple import
+  (import sys os)
+
+  ;; from os.path import basename
+  (import [os.path [basename]])
+  (assert (= (basename "/some/path") "path"))
+
+  ;; import os.path as p
+  (import [os.path :as p])
+  (assert (= p.basename basename))
+
+  ;; from os.path import basename as bn
+  (import [os.path [basename :as bn]])
+  (assert (= bn basename))
+
+  (import [sys])
+
+  ;; Multiple stuff to import
+  (import sys [os.path [dirname]]
+          [os.path :as op]
+          [os.path [dirname :as dn]])
+  (assert (= (dirname "/some/path") "/some"))
+  (assert (= op.dirname dirname))
+  (assert (= dn dirname)))
+
+
+(defn test-lambda-keyword-lists []
+  "NATIVE: test lambda keyword lists"
+  (defn foo (x &rest xs &kwargs kw) [x xs kw])
+  (assert (= (foo 10 20 30) [10 (, 20 30) {}])))
+
+
+(defn test-key-arguments []
+  "NATIVE: test &key function arguments"
+  (defn foo [&key {"a" None "b" 1}] [a b])
+  (assert (= (foo) [None 1]))
+  (assert (= (apply foo [] {"a" 2}) [2 1]))
+  (assert (= (apply foo [] {"b" 42}) [None 42])))
+
+
+(defn test-optional-arguments []
+  "NATIVE: test &optional function arguments"
+  (defn foo [a b &optional c [d 42]] [a b c d])
+  (assert (= (foo 1 2) [1 2 None 42]))
+  (assert (= (foo 1 2 3) [1 2 3 42]))
+  (assert (= (foo 1 2 3 4) [1 2 3 4])))
+
+
+(defn test-undefined-name []
+  "NATIVE: test that undefined names raise errors"
+  (try
+   (do
+    xxx
+    (assert False))
+   (except [NameError])))
+
+(defn test-if-let-mixing []
+  "NATIVE: test that we can now mix if and let"
+  (assert (= 0 (if true (let [[x 0]] x) 42))))
+
+(defn test-if-in-if []
+  "NATIVE: test that we can use if in if"
+  (assert (= 42
+             (if (if 1 True False)
+               42
+               43)))
+  (assert (= 43
+             (if (if 0 True False)
+               42
+               43))))
+
+
+(defn test-try-except-return []
+  "NATIVE: test we can return from in a try except"
+  (assert (= ((fn [] (try xxx (except [NameError] (+ 1 1))))) 2))
+  (setv foo (try xxx (except [NameError] (+ 1 1))))
+  (assert (= foo 2))
+  (setv foo (try (+ 2 2) (except [NameError] (+ 1 1))))
+  (assert (= foo 4)))
+
+
+(defn test-require []
+  "NATIVE: test requiring macros from python code"
+  (try
+    (assert (= "this won't happen" (qplah 1 2 3 4)))
+  (catch [NameError]))
+  (require tests.resources.tlib)
+  (assert (= [1 2 3] (qplah 1 2 3))))
+
+
+(defn test-require-native []
+  "NATIVE: test requiring macros from native code"
+  (assert (= "failure"
+             (try
+              (do (setv x [])
+                  (rev (.append x 1) (.append x 2) (.append x 3))
+                  (assert (= x [3 2 1]))
+                  "success")
+              (except [NameError] "failure"))))
+  (import tests.native_tests.native_macros)
+  (assert (= "failure"
+             (try
+              (do (setv x [])
+                  (rev (.append x 1) (.append x 2) (.append x 3))
+                  (assert (= x [3 2 1]))
+                  "success")
+              (except [NameError] "failure"))))
+  (require tests.native_tests.native_macros)
+  (assert (= "success"
+             (try
+              (do (setv x [])
+                  (rev (.append x 1) (.append x 2) (.append x 3))
+                  (assert (= x [3 2 1]))
+                  "success")
+              (except [NameError] "failure")))))
+
+
+(defn test-encoding-nightmares []
+  "NATIVE: test unicode encoding escaping crazybits"
+  (assert (= (len "ℵℵℵ♥♥♥\t♥♥\r\n") 11)))
+
+
+(defn test-keyword-dict-access []
+  "NATIVE: test keyword dict access"
+  (assert (= "test" (:foo {:foo "test"}))))
+
+
+(defn test-take []
+  "NATIVE: test the take operator"
+  (assert (= [1 2 3] (list (take 3 [1 2 3]))))
+  (assert (= [1 2 3] (list (take 4 [1 2 3]))))
+  (assert (= [1 2] (list (take 2 [1 2 4])))))
+
+
+(defn test-break-breaking []
+  "NATIVE: test checking if break actually breaks"
+  (defn holy-grail [] (for [x (range 10)] (if (= x 5) (break))) x)
+  (assert (= (holy-grail) 5)))
+
+
+(defn test-continue-continuation []
+  "NATIVE: test checking if continue actually continues"
+  (setv y [])
+  (for [x (range 10)]
+    (if (!= x 5)
+      (continue))
+    (.append y x))
+  (assert (= y [5])))
+
+
+(defn test-empty-list []
+  "Evaluate an empty list to a []"
+  (assert (= () [])))
+
+
+(defn test-string []
+  (assert (string? (string "a")))
+  (assert (string? (string 1)))
+  (assert (= u"unicode" (string "unicode"))))
+
+(defn test-del []
+  "NATIVE: Test the behavior of del"
+  (setv foo 42)
+  (assert (= foo 42))
+  (del foo)
+  (assert (= 'good
+    (try
+      (do foo 'bad)
+      (except [NameError] 'good))))
+  (setv test (list (range 5)))
+  (del (get test 4))
+  (assert (= test [0 1 2 3]))
+  (del (get test 2))
+  (assert (= test [0 1 3])))
+
+
+(defn test-macroexpand []
+  "Test macroexpand on ->"
+  (assert (= (macroexpand '(-> (a b) (x y)))
+             '(x (a b) y)))
+  (assert (= (macroexpand '(-> (a b) (-> (c d) (e f))))
+             '(e (c (a b) d) f))))
+
+
+(defn test-macroexpand-1 []
+  "Test macroexpand-1 on ->"
+  (assert (= (macroexpand-1 '(-> (a b) (-> (c d) (e f))))
+             '(-> (a b) (c d) (e f)))))
+
+(defn test-merge-with []
+  "NATIVE: test merge-with"
+  (assert (= (merge-with + {} {}) nil))
+  (assert (= (merge-with + {"a" 10 "b" 20} {}) {"a" 10 "b" 20}))
+  (assert (= (merge-with + {} {"a" 10 "b" 20}) {"a" 10 "b" 20}))
+  (assert (= (merge-with + {"a" 10 "b" 20} {"a" 1 "c" 30})
+	     {"a" 11 "b" 20 "c" 30}))
+  (assert (= (merge-with +
+                         {:a 1  :b 2}
+                         {:a 9  :b 98  :c 0}
+                         {:a 10 :b 100 :c 10}
+                         {:a 5}
+                         {:c 5  :d 42})
+             {:d 42 :c 15 :a 25 :b 200}))
+  (assert (= (merge-with or_
+                         {"a" (set [1 2 3]) "b" (set [4 5 6])}
+                         {"a" (set [2 3 7 8]) "c" (set [1 2 3])})
+             {"a" (set [1 2 3 7 8]) "c" (set [1 2 3]) "b" (set [4 5 6])})))
+
+(defn test-calling-module-name []
+  "NATIVE: Test the calling-module-name function"
+  (assert (= (calling-module-name -1) "hy.core.language"))
+  (assert (= (calling-module-name 0) "tests.native_tests.language")))
+
+
+(defn test-disassemble []
+  "NATIVE: Test the disassemble function"
+  (assert (= (disassemble '(do (leaky) (leaky) (macros)))
+             "Module(\n    body=[\n        Expr(value=Call(func=Name(id='leaky'), args=[], keywords=[], starargs=None, kwargs=None)),\n        Expr(value=Call(func=Name(id='leaky'), args=[], keywords=[], starargs=None, kwargs=None)),\n        Expr(value=Call(func=Name(id='macros'), args=[], keywords=[], starargs=None, kwargs=None))])"))
+  (assert (= (disassemble '(do (leaky) (leaky) (macros)) true)
+             "leaky()\nleaky()\nmacros()")))
+
+
+(defn test-attribute-access []
+  "NATIVE: Test the attribute access DSL"
+  (defclass mycls [object])
+
+  (setv foo [(mycls) (mycls) (mycls)])
+  (assert (is (. foo) foo))
+  (assert (is (. foo [0]) (get foo 0)))
+  (assert (is (. foo [0] --class--) mycls))
+  (assert (is (. foo [1] --class--) mycls))
+  (assert (is (. foo [(+ 1 1)] --class--) mycls))
+  (assert (= (. foo [(+ 1 1)] --class-- --name-- [0]) "m"))
+  (assert (= (. foo [(+ 1 1)] --class-- --name-- [1]) "y"))
+
+  (setv bar (mycls))
+  (setv (. foo [1]) bar)
+  (assert (is bar (get foo 1)))
+  (setv (. foo [1] test) "hello")
+  (assert (= (getattr (. foo [1]) "test") "hello")))
+
+(defn test-keyword-quoting []
+  "NATIVE: test keyword quoting magic"
+  (assert (= :foo "\ufdd0:foo"))
+  (assert (= `:foo "\ufdd0:foo")))
+
+(defn test-only-parse-lambda-list-in-defn []
+  "NATIVE: test lambda lists are only parsed in defn"
+  (try
+   (foo [&rest spam] 1)
+   (catch [NameError] True)
+   (else (raise AssertionError))))
+
+(defn test-read []
+  "NATIVE: test that read takes something for stdin and reads"
+  (if-python2
+    (import [StringIO [StringIO]])
+    (import [io [StringIO]]))
+  (import [hy.models.expression [HyExpression]])
+
+  (def stdin-buffer (StringIO "(+ 2 2)\n(- 2 2)"))
+  (assert (= (eval (read stdin-buffer)) 4))
+  (assert (isinstance (read stdin-buffer) HyExpression))
+
+  "Multiline test"
+  (def stdin-buffer (StringIO "(\n+\n41\n1\n)\n(-\n2\n1\n)"))
+  (assert (= (eval (read stdin-buffer)) 42))
+  (assert (= (eval (read stdin-buffer)) 1))
+
+  "EOF test"
+  (def stdin-buffer (StringIO "(+ 2 2)"))
+  (read stdin-buffer)
+  (try
+    (read stdin-buffer)
+    (catch [e Exception]
+      (assert (isinstance e EOFError)))))
+
+(defn test-keyword-creation []
+  "NATIVE: Test keyword creation"
+  (assert (= (keyword "foo") :foo))
+  (assert (= (keyword "foo_bar") :foo-bar))
+  (assert (= (keyword `foo) :foo))
+  (assert (= (keyword `foo-bar) :foo-bar))
+  (assert (= (keyword 'foo) :foo))
+  (assert (= (keyword 'foo-bar) :foo-bar))
+  (assert (= (keyword 1) :1))
+  (assert (= (keyword 1.0) :1.0))
+  (assert (= (keyword :foo_bar) :foo-bar)))
+
+(defn test-name-conversion []
+  "NATIVE: Test name conversion"
+  (assert (= (name "foo") "foo"))
+  (assert (= (name "foo_bar") "foo-bar"))
+  (assert (= (name `foo) "foo"))
+  (assert (= (name `foo_bar) "foo-bar"))
+  (assert (= (name 'foo) "foo"))
+  (assert (= (name 'foo_bar) "foo-bar"))
+  (assert (= (name 1) "1"))
+  (assert (= (name 1.0) "1.0"))
+  (assert (= (name :foo) "foo"))
+  (assert (= (name :foo_bar) "foo-bar"))
+  (assert (= (name test-name-conversion) "test-name-conversion")))
+(setv square (fn [x]
+               (* x x)))
+
+
+(setv test_basic_math (fn []
+                        "NATIVE: Test basic math."
+                        (assert (= (+ 2 2) 4))))
+
+(setv test_mult (fn []
+                  "NATIVE: Test multiplication."
+                  (assert (= 4 (square 2)))
+                  (assert (= 8 (* 8)))
+                  (assert (= 1 (*)))))
+
+
+(setv test_sub (fn []
+                 "NATIVE: Test subtraction"
+                 (assert (= 4 (- 8 4)))
+                 (assert (= -8 (- 8)))))
+
+
+(setv test_add (fn []
+                 "NATIVE: Test addition"
+                 (assert (= 4 (+ 1 1 1 1)))
+                 (assert (= 8 (+ 8)))
+                 (assert (= 0 (+)))))
+
+
+(setv test_div (fn []
+                 "NATIVE: Test division"
+                 (assert (= 25 (/ 100 2 2)))
+                                ; Commented out until float constants get implemented
+                                ; (assert (= 0.5 (/ 1 2)))
+                 (assert (= 1 (* 2 (/ 1 2))))))
+
+(setv test_int_div (fn []
+                     "NATIVE: Test integer division"
+                     (assert (= 25 (// 101 2 2)))))
+
+(defn test-modulo []
+  "NATIVE: test mod"
+  (assert (= (% 10 2) 0)))
+
+(defn test-pow []
+  "NATIVE: test pow"
+  (assert (= (** 10 2) 100)))
+
+(defn test-lshift []
+  "NATIVE: test lshift"
+  (assert (= (<< 1 2) 4)))
+
+(defn test-rshift []
+  "NATIVE: test lshift"
+  (assert (= (>> 8 1) 4)))
+
+(defn test-bitor []
+  "NATIVE: test lshift"
+  (assert (= (| 1 2) 3)))
+
+(defn test-bitxor []
+  "NATIVE: test xor"
+  (assert (= (^ 1 2) 3)))
+
+(defn test-bitand []
+  "NATIVE: test lshift"
+  (assert (= (& 1 2) 0)))
+
+(defn test-augassign-add []
+  "NATIVE: test augassign add"
+  (let [[x 1]]
+    (+= x 41)
+    (assert (= x 42))))
+
+(defn test-augassign-sub []
+  "NATIVE: test augassign sub"
+  (let [[x 1]]
+    (-= x 41)
+    (assert (= x -40))))
+
+(defn test-augassign-mult []
+  "NATIVE: test augassign mult"
+  (let [[x 1]]
+    (*= x 41)
+    (assert (= x 41))))
+
+(defn test-augassign-div []
+  "NATIVE: test augassign div"
+  (let [[x 42]]
+    (/= x 2)
+    (assert (= x 21))))
+
+(defn test-augassign-floordiv []
+  "NATIVE: test augassign floordiv"
+  (let [[x 42]]
+    (//= x 2)
+    (assert (= x 21))))
+
+(defn test-augassign-mod []
+  "NATIVE: test augassign mod"
+  (let [[x 42]]
+    (%= x 2)
+    (assert (= x 0))))
+
+(defn test-augassign-pow []
+  "NATIVE: test augassign pow"
+  (let [[x 2]]
+    (**= x 3)
+    (assert (= x 8))))
+
+(defn test-augassign-lshift []
+  "NATIVE: test augassign lshift"
+  (let [[x 2]]
+    (<<= x 2)
+    (assert (= x 8))))
+
+(defn test-augassign-rshift []
+  "NATIVE: test augassign rshift"
+  (let [[x 8]]
+    (>>= x 1)
+    (assert (= x 4))))
+
+(defn test-augassign-bitand []
+  "NATIVE: test augassign bitand"
+  (let [[x 8]]
+    (&= x 1)
+    (assert (= x 0))))
+
+(defn test-augassign-bitor []
+  "NATIVE: test augassign bitand"
+  (let [[x 0]]
+    (|= x 2)
+    (assert (= x 2))))
+
+(defn test-augassign-bitxor []
+  "NATIVE: test augassign bitand"
+  (let [[x 1]]
+    (^= x 1)
+    (assert (= x 0))))
+
+(defn overflow-int-to-long []
+  "NATIVE: test if int does not raise an overflow exception"
+  (assert (integer? (+ 1 1000000000000000000000000))))
+(defmacro rev [&rest body]
+  "Execute the `body` statements in reverse"
+  (quasiquote (do (unquote-splice (list (reversed body))))))
+
+
+(defn test-rev-macro []
+  "NATIVE: test stararged native macros"
+  (setv x [])
+  (rev (.append x 1) (.append x 2) (.append x 3))
+  (assert (= x [3 2 1])))
+
+; Macros returning constants
+
+(defmacro an-int [] 42)
+(assert (= (an-int) 42))
+
+(defmacro a-true [] True)
+(assert (= (a-true) True))
+(defmacro a-false [] False)
+(assert (= (a-false) False))
+
+(defmacro a-float [] 42.)
+(assert (= (a-float) 42.))
+
+(defmacro a-complex [] 42j)
+(assert (= (a-complex) 42j))
+
+(defmacro a-string [] "foo")
+(assert (= (a-string) "foo"))
+
+(defmacro a-list [] [1 2])
+(assert (= (a-list) [1 2]))
+
+(defmacro a-tuple [&rest b] b)
+(assert (= (a-tuple 1 2) [1 2]))
+
+(defmacro a-dict [] {1 2})
+(assert (= (a-dict) {1 2}))
+
+(defmacro a-none [])
+(assert (= (a-none) None))
+
+; A macro calling a previously defined function
+(eval-when-compile
+ (defn foo [x y]
+   (quasiquote (+ (unquote x) (unquote y)))))
+
+(defmacro bar [x y]
+  (foo x y))
+
+(defn test-fn-calling-macro []
+  "NATIVE: test macro calling a plain function"
+  (assert (= 3 (bar 1 2))))
+
+(defn test-midtree-yield []
+  "NATIVE: test yielding with a returnable"
+  (defn kruft [] (yield) (+ 1 1)))
+
+(defn test-midtree-yield-in-for []
+  "NATIVE: test yielding in a for with a return"
+  (defn kruft-in-for []
+    (for* [i (range 5)]
+      (yield i))
+    (+ 1 2)))
+
+(defn test-midtree-yield-in-while []
+  "NATIVE: test yielding in a while with a return"
+  (defn kruft-in-while []
+    (setv i 0)
+    (while (< i 5)
+      (yield i)
+      (setv i (+ i 1)))
+    (+ 2 3)))
+
+(defn test-multi-yield []
+  "NATIVE: testing multiple yields"
+  (defn multi-yield []
+    (for* [i (range 3)]
+      (yield i))
+    (yield "a")
+    (yield "end"))
+  (assert (= (list (multi-yield)) [0 1 2 "a" "end"])))
+
+
+; Macro that checks a variable defined at compile or load time
+(setv phase "load")
+(eval-when-compile
+ (setv phase "compile"))
+(defmacro phase-when-compiling [] phase)
+(assert (= phase "load"))
+(assert (= (phase-when-compiling) "compile"))
+
+(setv initialized False)
+(eval-and-compile
+ (setv initialized True))
+(defmacro test-initialized [] initialized)
+(assert initialized)
+(assert (test-initialized))
+
+(defn test-if-python2 []
+  (import sys)
+  (assert (= (get sys.version_info 0)
+             (if-python2 2 3))))
+
+(defn test-gensym-in-macros []
+  (import ast)
+  (import [astor.codegen [to_source]])
+  (import [hy.importer [import_buffer_to_ast]])
+  (setv macro1 "(defmacro nif [expr pos zero neg]
+      (let [[g (gensym)]]
+        `(let [[~g ~expr]]
+           (cond [(pos? ~g) ~pos]
+                 [(zero? ~g) ~zero]
+                 [(neg? ~g) ~neg]))))
+
+    (print (nif (inc -1) 1 0 -1))
+    ")
+  ;; expand the macro twice, should use a different
+  ;; gensym each time
+  (setv _ast1 (import_buffer_to_ast macro1 "foo"))
+  (setv _ast2 (import_buffer_to_ast macro1 "foo"))
+  (setv s1 (to_source _ast1))
+  (setv s2 (to_source _ast2))
+  ;; and make sure there is something new that starts with :G_
+  (assert (in ":G_" s1))
+  (assert (in ":G_" s2))
+  ;; but make sure the two don't match each other
+  (assert (not (= s1 s2))))
+
+(defn test-with-gensym []
+  (import ast)
+  (import [astor.codegen [to_source]])
+  (import [hy.importer [import_buffer_to_ast]])
+  (setv macro1 "(defmacro nif [expr pos zero neg]
+      (with-gensyms [a]
+        `(let [[~a ~expr]]
+           (cond [(pos? ~a) ~pos]
+                 [(zero? ~a) ~zero]
+                 [(neg? ~a) ~neg]))))
+
+    (print (nif (inc -1) 1 0 -1))
+    ")
+  ;; expand the macro twice, should use a different
+  ;; gensym each time
+  (setv _ast1 (import_buffer_to_ast macro1 "foo"))
+  (setv _ast2 (import_buffer_to_ast macro1 "foo"))
+  (setv s1 (to_source _ast1))
+  (setv s2 (to_source _ast2))
+  (assert (in ":a_" s1))
+  (assert (in ":a_" s2))
+  (assert (not (= s1 s2))))
+
+(defn test-defmacro-g! []
+  (import ast)
+  (import [astor.codegen [to_source]])
+  (import [hy.importer [import_buffer_to_ast]])
+  (setv macro1 "(defmacro/g! nif [expr pos zero neg]
+        `(let [[~g!res ~expr]]
+           (cond [(pos? ~g!res) ~pos]
+                 [(zero? ~g!res) ~zero]
+                 [(neg? ~g!res) ~neg])))
+
+    (print (nif (inc -1) 1 0 -1))
+    ")
+  ;; expand the macro twice, should use a different
+  ;; gensym each time
+  (setv _ast1 (import_buffer_to_ast macro1 "foo"))
+  (setv _ast2 (import_buffer_to_ast macro1 "foo"))
+  (setv s1 (to_source _ast1))
+  (setv s2 (to_source _ast2))
+  (assert (in ":res_" s1))
+  (assert (in ":res_" s2))
+  (assert (not (= s1 s2)))
+
+  ;; defmacro/g! didn't like numbers initially because they
+  ;; don't have a startswith method and blew up during expansion
+  (setv macro2 "(defmacro/g! two-point-zero [] `(+ (float 1) 1.0))")
+  (assert (import_buffer_to_ast macro2 "foo")))
+
+
+(defn test-if-not []
+  (assert (= (if-not True :yes :no)
+             :no))
+  (assert (= (if-not False :yes :no)
+             :yes))
+  (assert (nil? (if-not True :yes)))
+  (assert (= (if-not False :yes)
+             :yes)))
+
+
+(defn test-lisp-if []
+  "test that lisp-if works as expected"
+  ; nil is false
+  (assert (= (lisp-if None "true" "false") "false"))
+  (assert (= (lisp-if nil "true" "false") "false"))
+
+  ; But everything else is True!  Even falsey things.
+  (assert (= (lisp-if True "true" "false") "true"))
+  (assert (= (lisp-if False "true" "false") "true"))
+  (assert (= (lisp-if 0 "true" "false") "true"))
+  (assert (= (lisp-if "some-string" "true" "false") "true"))
+  (assert (= (lisp-if "" "true" "false") "true"))
+  (assert (= (lisp-if (+ 1 2 3) "true" "false") "true"))
+
+  ; Just to be sure, test the alias lif
+  (assert (= (lif nil "true" "false") "false"))
+  (assert (= (lif 0 "true" "false") "true")))
+
+
+(defn test-defn-alias []
+  (defn-alias [tda-main tda-a1 tda-a2] [] :bazinga)
+  (defun-alias [tda-main tda-a1 tda-a2] [] :bazinga)
+  (assert (= (tda-main) :bazinga))
+  (assert (= (tda-a1) :bazinga))
+  (assert (= (tda-a2) :bazinga))
+  (assert (= tda-main tda-a1 tda-a2)))
+
+(defn test-botsbuildbots []
+  (assert (> (len (first (Botsbuildbots))) 50)))
+;; Tests where the emited code relies on Python 3.
+;; Conditionally included in nosetests runs.
+
+(import [hy._compat [PY33]])
+(import [hy.errors [HyCompileError]])
+
+(defn test-yield-from []
+ "NATIVE: testing yield from"
+
+ (try
+  (eval
+   '(do (defn yield-from-test []
+          (for* [i (range 3)]
+            (yield i))
+          (yield-from [1 2 3]))
+        (assert (= (list (yield-from-test)) [0 1 2 1 2 3]))))
+  (catch [e HyCompileError]
+    ;; Yield-from is supported in py3.3+ only
+    (assert (not PY33)))
+  (else (assert PY33))))
+
+
+
+(defn test-exception-cause []
+  (try (raise ValueError :from NameError)
+  (except [e [ValueError]]
+    (assert (= (type (. e __cause__)) NameError)))))
+(import hy)
+
+
+(defn test-quote []
+  "NATIVE: test for quoting functionality"
+  (setv q (quote (a b c)))
+  (assert (= (len q) 3))
+  (assert (= q [(quote a) (quote b) (quote c)])))
+
+
+(defn test-quoted-hoistable []
+  "NATIVE: check whether quote works on hoisted things"
+  (setv f (quote (if true true true)))
+  (assert (= (car f) (quote if)))
+  (assert (= (cdr f) (quote (true true true)))))
+
+
+(defn test-quoted-macroexpand []
+  "NATIVE: check that we don't expand macros in quoted expressions"
+  (setv q1 (quote (-> a b c)))
+  (setv q2 (quasiquote (-> a b c)))
+  (assert (= q1 q2))
+  (assert (= (car q1) (quote ->)))
+  (assert (= (cdr q1) (quote (a b c)))))
+
+
+(defn test-quote-dicts []
+  "NATIVE: test quoting dicts"
+  (setv q (quote {foo bar baz quux}))
+  (assert (= (len q) 4))
+  (assert (= (get q 0) (quote foo)))
+  (assert (= (get q 1) (quote bar)))
+  (assert (= (get q 2) (quote baz)))
+  (assert (= (get q 3) (quote quux)))
+  (assert (= (type q) hy.HyDict)))
+
+
+(defn test-quote-expr-in-dict []
+  "NATIVE: test quoting nested exprs in dict"
+  (setv q (quote {(foo bar) 0}))
+  (assert (= (len q) 2))
+  (setv qq (get q 0))
+  (assert (= qq (quote (foo bar)))))
+
+
+(defn test-quasiquote []
+  "NATIVE: test that quasiquote and quote are equivalent for simple cases"
+  (setv q (quote (a b c)))
+  (setv qq (quasiquote (a b c)))
+  (assert (= q qq)))
+
+
+(defn test-unquote []
+  "NATIVE: test that unquote works as expected"
+  (setv q (quote (unquote foo)))
+  (assert (= (len q) 2))
+  (assert (= (get q 1) (quote foo)))
+  (setv qq (quasiquote (a b c (unquote (+ 1 2)))))
+  (assert (= (len qq) 4))
+  (assert (= qq (quote (a b c 3)))))
+
+
+(defn test-unquote-splice []
+  "NATIVE: test splicing unquotes"
+  (setv q (quote (c d e)))
+  (setv qq (quasiquote (a b (unquote-splice q) f (unquote-splice q))))
+  (assert (= (len qq) 9))
+  (assert (= qq (quote (a b c d e f c d e)))))
+
+
+(defn test-nested-quasiquote []
+  "NATIVE: test nested quasiquotes"
+  (setv qq (quasiquote (1 (quasiquote (unquote (+ 1 (unquote (+ 2 3))))) 4)))
+  (setv q (quote (1 (quasiquote (unquote (+ 1 5))) 4)))
+  (assert (= (len q) 3))
+  (assert (= (get qq 1) (quote (quasiquote (unquote (+ 1 5))))))
+  (assert (= q qq)))
+
+
+(defmacro doodle [&rest body]
+  `(do ~@body))
+
+(defn test-unquote-splice []
+  "NATIVE: test unquote-splice does what's intended"
+  (assert (=
+    (doodle
+      [1 2 3]
+      [4 5 6])
+    [4 5 6])))
+(defn test-reader-macro []
+  "Test a basic redaer macro"
+  (defreader ^ [expr]
+    expr)
+
+  (assert (= #^"works" "works")))
+
+
+(defn test-reader-macro-expr []
+  "Test basic exprs like lists and arrays"
+  (defreader n [expr]
+    (get expr 1))
+
+  (assert (= #n[1 2] 2))
+  (assert (= #n(1 2) 2)))
+
+
+(defn test-reader-macro-override []
+  "Test if we can override function symbols"
+  (defreader + [n]
+    (+ n 1))
+
+  (assert (= #+2 3)))
+
+
+(defn test-reader-macros-macros []
+  "Test if defreader is actually a macro"
+  (defreader t [expr]
+    `(, ~@expr))
+
+  (def a #t[1 2 3])
+
+  (assert (= (type a) tuple))
+  (assert (= (, 1 2 3) a)))
+
+
+(defn test-shadow-addition []
+  "NATIVE: test shadow addition"
+  (let [[x +]]
+    (assert (try
+             (x)
+             (catch [TypeError] True)
+             (else (throw AssertionError))))
+    (assert (= (x 1 2 3 4) 10))
+    (assert (= (x 1 2 3 4 5) 15))
+    ; with strings
+    (assert (= (x "a")
+               "a"))
+    (assert (= (x "a" "b" "c")
+               "abc"))
+    ; with lists
+    (assert (= (x ["a"])
+               ["a"]))
+    (assert (= (x ["a"] ["b"] ["c"])
+               ["a" "b" "c"]))))
+
+
+(defn test-shadow-subtraction []
+  "NATIVE: test shadow subtraction"
+  (let [[x -]]
+    (assert (try
+             (x)
+             (catch [TypeError] True)
+             (else (throw AssertionError))))
+    (assert (= (x 1) -1))
+    (assert (= (x 2 1) 1))
+    (assert (= (x 2 1 1) 0))))
+
+
+(defn test-shadow-multiplication []
+  "NATIVE: test shadow multiplication"
+  (let [[x *]]
+    (assert (= (x) 1))
+    (assert (= (x 3) 3))
+    (assert (= (x 3 3) 9))))
+
+
+(defn test-shadow-division []
+  "NATIVE: test shadow division"
+  (let [[x /]]
+    (assert (try
+             (x)
+             (catch [TypeError] True)
+             (else (throw AssertionError))))
+    (assert (= (x 1) 1))
+    (assert (= (x 8 2) 4))
+    (assert (= (x 8 2 2) 2))
+    (assert (= (x 8 2 2 2) 1))))
+(defn test-unless []
+  "NATIVE: test unless"
+  (assert (= (unless false 1) 1))
+  (assert (= (unless false 1 2) 2))
+  (assert (= (unless false 1 3) 3))
+  (assert (= (unless true 2) null))
+  (assert (= (unless true 2) nil))
+  (assert (= (unless (!= 1 2) 42) null))
+  (assert (= (unless (!= 1 2) 42) nil))
+  (assert (= (unless (!= 2 2) 42) 42)))
+(defn test-when []
+  "NATIVE: test when"
+  (assert (= (when true 1) 1))
+  (assert (= (when true 1 2) 2))
+  (assert (= (when true 1 3) 3))
+  (assert (= (when false 2) null))
+  (assert (= (when (= 1 2) 42) null))
+  (assert (= (when false 2) nil))
+  (assert (= (when (= 1 2) 42) nil))
+  (assert (= (when (= 2 2) 42) 42)))
+(defn foodec [func]
+  (lambda [] (+ 1 1)))
+
+
+(with-decorator foodec
+  (defn tfunction []
+    (* 2 2)))
+
+
+(defn test-decorators []
+  "NATIVE: test decorators."
+  (assert (= (tfunction) 2)))
+(defclass WithTest [object]
+  [(--init-- 
+    (fn [self val]
+      (setv self.val val)
+      None))
+
+  (--enter--
+    (fn [self]
+      self.val))
+
+  (--exit--
+    (fn [self type value traceback]
+      (setv self.val None)))])
+
+(defn test-single-with []
+  "NATIVE: test a single with"
+  (with [[t (WithTest 1)]]
+    (assert (= t 1))))
+
+(defn test-two-with []
+  "NATIVE: test two withs"
+  (with [[t1 (WithTest 1)]
+         [t2 (WithTest 2)]]
+   (assert (= t1 1))
+   (assert (= t2 2))))
+
+(defn test-thrice-with []
+  "NATIVE: test three withs"
+  (with [[t1 (WithTest 1)]
+         [t2 (WithTest 2)]
+         [t3 (WithTest 3)]]
+    (assert (= t1 1))
+    (assert (= t2 2))
+    (assert (= t3 3))))
+
+(defn test-quince-with []
+  "NATIVE: test four withs, one with no args"
+    (with [[t1 (WithTest 1)]
+          [t2 (WithTest 2)]
+          [t3 (WithTest 3)]
+          [(WithTest 4)]]
+    (assert (= t1 1))
+    (assert (= t2 2))
+    (assert (= t3 3))))
+#!/usr/bin/env hy
+
+(import sys)
+(import argparse)
+
+(setv parser (argparse.ArgumentParser))
+
+(.add_argument parser "-i")
+(.add_argument parser "-c")
+
+(setv args (.parse_args parser))
+
+;; using (cond) allows -i to take precedence over -c
+
+(cond [args.i
+       (print (str args.i))]
+      [args.c
+       (print (str "got c"))])
+(defmain [&rest args]
+  (print args)
+  (print "Hello World")
+  (if (in "exit1" args)
+    1))
+(print "This Should Still Works")
+
+(defn main []
+    (print "This Should Not Work"))
+(thisshouldnotwork)
+;; This is a comment. It shall be ignored by the parser.
+
+(setv square (fn [x]
+               (* x x)))
