@@ -17,6 +17,8 @@ class CodeScroll(Gtk.Window):
 
     blank_id = None
 
+    green_brightness = 10
+
     def __init__(self, code_dir):
         self.load_codes(code_dir)
         Gtk.Window.__init__(self, title = "Hack the planet")
@@ -39,7 +41,6 @@ class CodeScroll(Gtk.Window):
         self.add(fixed)
 
         GObject.timeout_add(self.speed, self.scroll_text)
-        self.fullscreen()
 
     def load_codes(self, code_dir):
         code_files = [ f for f in os.listdir(code_dir) if not f.startswith('.') and path.isfile(path.join(code_dir,f)) ]
@@ -81,8 +82,33 @@ class CodeScroll(Gtk.Window):
         self.set_code(self.code_files[next_idx])
 
     def on_key_press_event(self, widget, event):
-        if event.keyval == Gdk.KEY_space:
+        v = event.keyval
+        if v == Gdk.KEY_space:
             self.next_code()
+        elif v == Gdk.KEY_minus:
+            self.dim_text()
+        elif v == Gdk.KEY_equal:
+            self.brighten_text()
+        elif v == Gdk.KEY_F11:
+            self.fullscreen()
+        elif v == Gdk.KEY_Escape:
+            self.unfullscreen()
+
+    def set_text_brightness(self, brightness):
+        self.green_brightness = brightness
+        self.override_color(0, Gdk.RGBA(0, brightness / 10.0, 0, 1))
+
+    def dim_text(self):
+        bright = self.green_brightness
+        if bright > 0:
+            bright -= 1
+        self.set_text_brightness(bright)
+
+    def brighten_text(self):
+        bright = self.green_brightness
+        if bright < 10:
+            bright += 1
+        self.set_text_brightness(bright)
 
 
 win = CodeScroll("/home/steve/work/projects/hacker_photobooth/codes")
