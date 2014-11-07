@@ -7,6 +7,7 @@ from os import path
 class CodeScroll(Gtk.Window):
     black = Gdk.RGBA.from_color(Gdk.color_parse("#000"))
     green = Gdk.RGBA.from_color(Gdk.color_parse("#0F0"))
+    red = Gdk.RGBA.from_color(Gdk.color_parse("#F00"))
     # the number of lines to skip
     skip = 30
     # the number of lines to show at a time
@@ -14,18 +15,31 @@ class CodeScroll(Gtk.Window):
     # millis between frames
     speed=50
 
+    blank_id = None
+
     def __init__(self, code_dir):
         self.load_codes(code_dir)
         Gtk.Window.__init__(self, title = "Hack the planet")
 
         self.override_background_color(0, self.black)
         self.override_color(0, self.green)
-        self.override_font()
         self.modify_font(Pango.FontDescription('Mono 38'))
-        self.text = Gtk.Label("a bunch of code goes here", xalign=0, yalign=0)
-        self.add(self.text)
-        self.timeout_id = GObject.timeout_add(self.speed, self.scroll_text)
-        #self.fullscreen()
+
+        fixed = Gtk.Overlay()
+        self.text = Gtk.Label("", xalign=0, yalign=0)
+        fixed.add_overlay(self.text)
+
+        lang = Gtk.Label("")
+        lang.override_color(0, self.red)
+        lang.set_justify(Gtk.Justification.CENTER)
+        lang.modify_font(Pango.FontDescription('Mono Bold 128'))
+        fixed.add_overlay(lang)
+        self.language = lang
+
+        self.add(fixed)
+
+        GObject.timeout_add(self.speed, self.scroll_text)
+        self.fullscreen()
 
     def load_codes(self, code_dir):
         code_files = [ f for f in os.listdir(code_dir) if not f.startswith('.') and path.isfile(path.join(code_dir,f)) ]
@@ -37,16 +51,24 @@ class CodeScroll(Gtk.Window):
                 self.codes[code_file] = source.readlines()
 
     def set_code(self, code):
+        if self.blank_id:
+            GObject.source_remove(self.blank_id)
         self.current_code = self.codes[code]
         self.current_code_key = code
         self.top = 0
+        self.language.set_text(code)
+        self.blank_id = GObject.timeout_add(2000, self.hide_language)
+
+    def hide_language(self):
+        self.language.set_text("")
+        self.blank_id = None
+        return False
 
     def scroll_text(self):
         text = "".join(self.current_code[self.top:self.top + self.count])
         max_size = len(self.current_code)
         overflow = max_size - self.top
         if overflow < self.count:
-            print overflow
             text += "".join(self.current_code[0:self.count-overflow])
         self.text.set_text(text)
         self.top = (self.top + self.skip) % (len(self.current_code))
