@@ -83,11 +83,11 @@ class CodeScroll(Gtk.Window):
 
     def on_key_press_event(self, widget, event):
         v = event.keyval
-        if v == Gdk.KEY_space:
+        if v == Gdk.KEY_space or v == Gdk.KEY_KP_Enter or v == Gdk.KEY_Return:
             self.next_code()
-        elif v == Gdk.KEY_minus:
+        elif v == Gdk.KEY_minus or v == Gdk.KEY_KP_Subtract:
             self.dim_text()
-        elif v == Gdk.KEY_equal:
+        elif v == Gdk.KEY_equal or v == Gdk.KEY_KP_Add:
             self.brighten_text()
         elif v == Gdk.KEY_F11:
             self.fullscreen()
