@@ -111,7 +111,7 @@ class CodeScroll(Gtk.Window):
         self.set_text_brightness(bright)
 
 
-win = CodeScroll("/home/steve/work/projects/hacker_photobooth/codes")
+win = CodeScroll("codes")
 win.set_code('hy')
 win.connect("delete-event", Gtk.main_quit)
 win.connect("key-press-event", win.on_key_press_event)
